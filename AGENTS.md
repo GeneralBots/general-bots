@@ -338,8 +338,8 @@ When ANY error appears in logs during startup or operation:
   - Use `default-features = false` and explicitly opt-in to needed features
 
 ### Linting & Code Quality
-- **Clippy**: Code MUST pass `cargo clippy --all-targets --all-features` with **0 warnings**.
-- **No Allow**: Do not use `#[allow(clippy::...)]` unless absolutely necessary and documented.
+- **Clippy**: Code MUST pass `cargo clippy --workspace` with **0 warnings**.
+- **No Allow**: NEVER use `#[allow(clippy::...)]` in source code - FIX the code instead.
 
 ---
 
