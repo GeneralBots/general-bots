@@ -14,11 +14,11 @@ cargo build -p botserver
 cargo build -p botui
 
 echo "Starting botserver..."
-./target/debug/botserver --noconsole > botserver.log 2>&1 &
+RUST_LOG=trace ./target/debug/botserver --noconsole > botserver.log 2>&1 &
 echo "  PID: $!"
 
 echo "Starting botui..."
-BOTSERVER_URL="http://localhost:9000" ./target/debug/botui > botui.log 2>&1 &
+BOTSERVER_URL="http://localhost:8080" ./target/debug/botui > botui.log 2>&1 &
 echo "  PID: $!"
 
 echo "Done. Logs: tail -f botserver.log botui.log"
