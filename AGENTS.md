@@ -1,5 +1,7 @@
 # General Bots AI Agent Guidelines
-
+8080 is server 3000 is client ui 
+To test web is http://localhost:3000 (botui!)
+Use apenas a lingua culta.
 > **⚠️ CRITICAL SECURITY WARNING**
 I AM IN DEV ENV, but sometimes, pasting from PROD, do not treat my env as prod! Just fix, to me and push to CI. So I can test in PROD, for a while.
 >Use Playwrigth MCP to start localhost:3000/<bot> now.
@@ -34,6 +36,50 @@ See botserver/src/drive/local_file_monitor.rs to see how to load from /opt/gbo/d
 4. Reference **[Common Architectural Patterns](../README.md#-common-architectural-patterns)** before making changes
 5. Check **[Security Rules](#-security-directives---mandatory)** below - violations are blocking issues
 6. Follow **[Code Patterns](#-mandatory-code-patterns)** below - consistency is mandatory
+
+---
+
+## 🔄 Reset Process Notes
+
+### reset.sh Behavior
+- **Purpose**: Cleans and restarts the development environment
+- **Timeouts**: The script can timeout during "Step 3/4: Waiting for BotServer to bootstrap"
+- **Bootstrap Process**: Takes 3-5 minutes to install all components (Vault, PostgreSQL, Valkey, MinIO, Zitadel, LLM)
+
+### Common Issues
+1. **Script Timeout**: reset.sh waits for "Bootstrap complete: admin user" message
+   - If Zitadel isn't ready within 60s, admin user creation fails
+   - Script continues waiting indefinitely
+   - **Solution**: Check botserver.log for "Bootstrap process completed!" message
+
+2. **Zitadel Not Ready**: "Bootstrap check failed (Zitadel may not be ready)"
+   - Directory service may need more than 60 seconds to start
+   - Admin user creation deferred
+   - Services still start successfully
+
+3. **Services Exit After Start**: 
+   - botserver/botui may exit after initial startup
+   - Check logs for "dispatch failure" errors
+   - Check Vault certificate errors: "tls: failed to verify certificate: x509"
+
+### Manual Service Management
+```bash
+# If reset.sh times out, manually verify services:
+ps aux | grep -E "(botserver|botui)" | grep -v grep
+curl http://localhost:8080/health
+tail -f botserver.log botui.log
+
+# Restart services manually:
+./restart.sh
+```
+
+### Reset Verification
+After reset completes, verify:
+- ✅ PostgreSQL running (port 5432)
+- ✅ Valkey cache running (port 6379)
+- ✅ BotServer listening on port 8080
+- ✅ BotUI listening on port 3000
+- ✅ No errors in botserver.log
 
 ---
 
