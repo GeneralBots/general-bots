@@ -1,5 +1,4 @@
-# VibeCode Complete Implementation Roadmap v3.0
-## Dual Deployment: Internal GB Apps + External Forgejo ALM Projects
+# VibeCode Platform - Unified Implementation Roadmap
 
 ## Executive Summary
 
@@ -18,9 +17,15 @@
 - ✅ Designer AI (runtime modifications with undo/redo)
 - ✅ chromiumoxide dependency ready for browser automation
 - ✅ **Forgejo ALM integration** (mTLS, runners, web server on port 3000)
+- ✅ **MCP servers integration** (`botserver/src/sources/`)
 - ✅ **App deployment** (`/apps/{name}` routes, Drive storage)
 
 **What's Missing (Critical Gaps):**
+
+**Security (IMMEDIATE):**
+- ❌ Unsafe unwraps in production code
+- ❌ Dependency vulnerabilities (glib 0.18.5)
+- ❌ CSRF validation audit needed
 
 **Deployment Infrastructure (Phase 0 - CRITICAL):**
 - ❌ Deployment routing logic (internal vs external)
@@ -35,10 +40,135 @@
 - ❌ Browser automation engine UI
 - ❌ Multi-file editing workspace
 - ❌ Enhanced terminal
+- ❌ MCP panel integration
 
 ---
 
-## Architecture: Dual Deployment Model
+## Table of Contents
+
+1. [Part I: Security & Stability](#part-i-security--stability)
+2. [Part II: Dual Deployment Infrastructure](#part-ii-dual-deployment-infrastructure)
+3. [Part III: MCP Integration](#part-iii-mcp-integration)
+4. [Part IV: Professional Development Tools](#part-iv-professional-development-tools)
+5. [Part V: Architecture Diagrams](#part-v-architecture-diagrams)
+6. [Part VI: Implementation Phases](#part-vi-implementation-phases)
+7. [Part VII: File Organization](#part-vii-file-organization)
+8. [Part VIII: Testing Strategy](#part-viii-testing-strategy)
+9. [Part IX: Rollout Plan](#part-ix-rollout-plan)
+10. [Part X: Success Metrics](#part-x-success-metrics)
+
+---
+
+## Part I: Security & Stability
+
+**Priority:** ⚠️ **CRITICAL** - Must complete before any feature work
+
+### 1. Unsafe Unwraps in Production
+
+**Issue:** Codebase uses `.unwrap()`, `.expect()`, `panic!()` in production, violating AGENTS.md rules.
+
+**Vulnerable Locations:**
+```
+botserver/src/drive/drive_handlers.rs:269      - Response::builder() unwrap
+botserver/src/basic/compiler/mod.rs            - Multiple unwrap() calls
+botserver/src/llm/llm_models/deepseek_r3.rs   - unwrap() outside tests
+botserver/src/botmodels/opencv.rs             - Test scope unwrap() leaks
+```
+
+**Action Items:**
+- [ ] Replace ALL `.unwrap()` with safe alternatives:
+  - Use `?` operator with proper error propagation
+  - Use `unwrap_or_default()` for defaults
+  - Use pattern matching with early returns
+  - Apply `ErrorSanitizer` to avoid panics
+- [ ] Run `cargo clippy -- -W clippy::unwrap_used -W clippy::expect_used`
+- [ ] Add unit tests verifying error paths work correctly
+
+**Estimated Effort:** 4-6 hours
+
+---
+
+### 2. Dependency Vulnerabilities
+
+**Vulnerable Component:**
+- **Crate:** `glib 0.18.5`
+- **Advisory:** `RUSTSEC-2024-0429`
+- **Issue:** Unsoundness in `Iterator` and `DoubleEndedIterator` impls
+- **Context:** Pulled through `botdevice`/`botapp` via Tauri/GTK
+
+**Action Items:**
+- [ ] Review exact usage of glib in codebase
+- [ ] Check if patches are available in newer versions
+- [ ] Evaluate risk given desktop GUI context
+- [ ] If critical: upgrade GTK/Glib dependencies
+- [ ] If acceptable: document risk assessment
+
+**Estimated Effort:** 2-4 hours
+
+---
+
+### 3. General Security Posture
+
+**CSRF Protection:**
+- ✅ Custom CSRF store exists: `redis_csrf_store.rs`
+- ⚠️ **Verify:** ALL state-changing endpoints use it
+
+**Security Headers:**
+- ✅ `headers.rs` provides CSP, HSTS, X-Frame-Options
+- ⚠️ **Verify:** Headers are attached UNIVERSALLY
+
+**Action Items:**
+- [ ] Audit all POST/PUT/DELETE endpoints for CSRF validation
+- [ ] Create middleware test to ensure security headers on all responses
+- [ ] Document security checklist for new endpoints
+
+**Estimated Effort:** 3-4 hours
+
+---
+
+## Part II: Dual Deployment Infrastructure
+
+**Priority:** 🔴 **CRITICAL** - Core feature missing
+
+### Current State Analysis
+
+**Existing Infrastructure:**
+```rust
+// Forgejo ALM is already configured:
+botserver/src/security/mutual_tls.rs:150
+  - configure_forgejo_mtls() - mTLS setup for Forgejo
+
+botserver/src/core/package_manager/installer.rs
+  - forgejo binary installer
+  - forgejo-runner integration
+  - ALM_URL environment variable
+  - Port 3000 for Forgejo web UI
+
+botserver/src/basic/keywords/create_site.rs
+  - CREATE SITE keyword for app generation
+  - Stores to Drive: apps/{alias}
+  - Serves from: /apps/{alias}
+
+botserver/src/basic/keywords/app_server.rs
+  - Suite JS file serving
+  - Vendor file routing
+
+botserver/src/sources/
+  - MCP integration already exists
+  - 40+ API endpoints available
+```
+
+**Missing Components:**
+1. ❌ Deployment routing logic (internal vs external choice)
+2. ❌ Forgejo repository initialization API
+3. ❌ Git push to Forgejo repositories
+4. ❌ CI/CD pipeline template generation
+5. ❌ Forgejo Actions workflow builder
+6. ❌ Custom domain configuration for external projects
+
+---
+
+### Architecture: Dual Deployment Model
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -71,6 +201,7 @@
 │  🌐 Browser Automation Panel    ← Phase 4                   │
 │  📂 Multi-File Workspace        ← Phase 5                   │
 │  🖥️ Enhanced Terminal           ← Phase 6                   │
+│  🔌 MCP Panel Integration       ← Existing                  │
 └────────────────────────────┬─────────────────────────────────────┘
                              │
                 ┌────────────┴────────────┐
@@ -109,6 +240,11 @@
 │  │ Automation │  │ Operations │  │  Service   │            │
 │  │(chromiumoxide)│ │(git2)     │  │(xterm.js)  │            │
 │  └────────────┘  └────────────┘  └────────────┘            │
+│  ┌────────────────────────────────────────────┐            │
+│  │ MCP & Sources Integration ← ALREADY EXISTS  │            │
+│  │ - botserver/src/sources/mcp.rs             │            │
+│  │ - /api/ui/sources/* endpoints              │            │
+│  └────────────────────────────────────────────┘            │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
@@ -125,43 +261,7 @@
 
 ---
 
-# PART I: Deployment Infrastructure (Phase 0 - CRITICAL)
-
-## Current State Analysis
-
-**Existing Infrastructure:**
-```rust
-// Forgejo ALM is already configured:
-botserver/src/security/mutual_tls.rs:150
-  - configure_forgejo_mtls() - mTLS setup for Forgejo
-
-botserver/src/core/package_manager/installer.rs
-  - forgejo binary installer
-  - forgejo-runner integration
-  - ALM_URL environment variable
-  - Port 3000 for Forgejo web UI
-
-botserver/src/basic/keywords/create_site.rs
-  - CREATE SITE keyword for app generation
-  - Stores to Drive: apps/{alias}
-  - Serves from: /apps/{alias}
-
-botserver/src/basic/keywords/app_server.rs
-  - Suite JS file serving
-  - Vendor file routing
-```
-
-**Missing Components:**
-1. ❌ Deployment routing logic (internal vs external choice)
-2. ❌ Forgejo repository initialization API
-3. ❌ Git push to Forgejo repositories
-4. ❌ CI/CD pipeline template generation
-5. ❌ Forgejo Actions workflow builder
-6. ❌ Custom domain configuration for external projects
-
----
-
-## Phase 0.1: Deployment Router (P0 - CRITICAL)
+### Phase 0.1: Deployment Router (P0 - CRITICAL)
 
 **Goal:** Create routing logic to deploy apps internally or to Forgejo
 
@@ -292,7 +392,7 @@ pub enum DeploymentError {
 
 ---
 
-## Phase 0.2: Forgejo Integration (P0 - CRITICAL)
+### Phase 0.2: Forgejo Integration (P0 - CRITICAL)
 
 **Goal:** Initialize repositories and push code to Forgejo
 
@@ -612,7 +712,7 @@ pub struct DeploymentRequest {
 
 ---
 
-## Phase 0.3: Deployment UI in Vibe (P0 - CRITICAL)
+### Phase 0.3: Deployment UI in Vibe (P0 - CRITICAL)
 
 **Goal:** Add deployment choice UI to Vibe Builder
 
@@ -1053,13 +1153,63 @@ function showDeploymentSuccess(result) {
 
 ---
 
-# PART II: Frontend Feature Implementation (Phases 1-7)
+## Part III: MCP Integration
 
-After deployment infrastructure is in place, continue with the frontend tools:
+**Priority:** 🟡 **HIGH** - Leverage existing infrastructure
 
-## Phase 1: Code Editor Integration (P0 - Critical)
+### What Already Exists
 
-**Goal:** Replace textarea with professional code editor
+**Backend Implementation:**
+```
+botserver/src/sources/
+├── mod.rs              # Module exports
+├── mcp.rs              # MCP client, connection, server types
+├── ui.rs               # HTML pages for /suite/sources/*
+├── knowledge_base.rs   # Knowledge base upload/query
+└── sources_api         # API endpoints
+```
+
+**API Endpoints (40+ endpoints):**
+```
+/suite/sources:
+  - Main sources list page
+  - MCP server catalog
+  - Add MCP server form
+
+/api/ui/sources/*:
+  - /api/ui/sources/mcp               - List MCP servers
+  - /api/ui/sources/mcp/:name/enable  - Enable server
+  - /api/ui/sources/mcp/:name/tools   - List tools
+  - /api/ui/sources/kb/query          - Query knowledge base
+  - /api/ui/sources/repositories      - List repos
+  - /api/ui/sources/apps              - List apps
+```
+
+### Integration Task: Add MCP Panel to Vibe
+
+**Goal:** Show connected MCP servers in Vibe sidebar
+
+**Files to Create:**
+1. `botui/ui/suite/partials/vibe-mcp-panel.html` - MCP panel UI
+2. `botui/ui/suite/js/vibe-mcp.js` - Server management JavaScript
+3. `botui/ui/suite/vibe/mcp-panel.css` - Styling
+
+**Features:**
+- List connected MCP servers
+- Show server status (active/inactive)
+- Display available tools per server
+- Quick enable/disable toggles
+- "Add Server" button (opens `/suite/sources/mcp/add`)
+
+**Estimated Effort:** 6-8 hours
+
+---
+
+## Part IV: Professional Development Tools
+
+### Phase 1: Code Editor Integration (P0 - Critical)
+
+**Goal:** Replace textarea with Monaco Editor
 
 **Tasks:**
 
@@ -1104,7 +1254,7 @@ After deployment infrastructure is in place, continue with the frontend tools:
 
 ---
 
-## Phase 2: Database UI & Schema Visualization (P0 - Critical)
+### Phase 2: Database UI & Schema Visualization (P0 - Critical)
 
 **Goal:** Visual database management and query builder
 
@@ -1155,7 +1305,7 @@ After deployment infrastructure is in place, continue with the frontend tools:
 
 ---
 
-## Phase 3: Git Operations UI (P1 - High Priority)
+### Phase 3: Git Operations UI (P1 - High Priority)
 
 **Goal:** Version control interface in Vibe
 
@@ -1214,7 +1364,7 @@ After deployment infrastructure is in place, continue with the frontend tools:
 
 ---
 
-## Phase 4: Browser Automation Engine (P1 - High Priority)
+### Phase 4: Browser Automation Engine (P1 - High Priority)
 
 **Goal:** Pure Rust browser automation for testing & recording
 
@@ -1391,7 +1541,7 @@ test('Recorded test', async ({ page }) => {
 
 ---
 
-## Phase 5: Multi-File Editing Workspace (P2 - Medium Priority)
+### Phase 5: Multi-File Editing Workspace (P2 - Medium Priority)
 
 **Goal:** Professional multi-file editing
 
@@ -1439,7 +1589,7 @@ test('Recorded test', async ({ page }) => {
 
 ---
 
-## Phase 6: Enhanced Terminal (P2 - Medium Priority)
+### Phase 6: Enhanced Terminal (P2 - Medium Priority)
 
 **Goal:** Interactive shell in Vibe
 
@@ -1485,7 +1635,7 @@ test('Recorded test', async ({ page }) => {
 
 ---
 
-## Phase 7: Advanced CRM Templates (P2 - Medium Priority)
+### Phase 7: Advanced CRM Templates (P2 - Medium Priority)
 
 **Goal:** Pre-built CRM accelerators
 
@@ -1542,25 +1692,144 @@ test('Recorded test', async ({ page }) => {
 
 ---
 
-# PART III: Technical Implementation Notes
+## Part V: Architecture Diagrams
 
-## Code Quality Standards (per AGENTS.md)
+### Vibe UI Layout
 
-**MUST Follow:**
-1. ✅ **Error Handling** - NO panics, use `?` operator
-2. ✅ **Safe Commands** - Use `SafeCommand` wrapper
-3. ✅ **Error Sanitization** - Use `ErrorSanitizer`
-4. ✅ **SQL Safety** - Use `sql_guard`
-5. ✅ **Rate Limiting** - Per-IP and per-User limits
-6. ✅ **CSRF Protection** - CSRF tokens on state-changing endpoints
-7. ✅ **Security Headers** - CSP, HSTS, X-Frame-Options, etc.
-8. ✅ **No CDNs** - All assets local
-9. ✅ **File Size** - Max 450 lines per file
-10. ✅ **Clippy Clean** - 0 warnings, no `#[allow()]`
+```
+┌──────────────────────────────────────────────────────────────┐
+│  VIBE BUILDER                                                │
+├──────────────┬───────────────────────────────────────────────┤
+│              │  PIPELINE TABS                                │
+│   AGENTS     │  [PLAN] [BUILD] [REVIEW] [DEPLOY] [MONITOR]  │
+│   SIDEBAR    ├───────────────────────────────────────────────┤
+│              │                                               │
+│ ┌──────────┐ │  CANVAS AREA                                 │
+│ │Mantis #1│ │  - Task nodes (horizontal flow)              │
+│ │ EVOLVED  │ │  - Preview panel                             │
+│ └──────────┘ │  - Chat overlay                              │
+│ ┌──────────┐ │                                               │
+│ │Mantis #2│ │  [DEPLOYMENT BUTTON]                          │
+│ │  BRED   │ │                                               │
+│ └──────────┘ │                                               │
+│ ┌──────────┐ │                                               │
+│ │Mantis #3│ │                                               │
+│ │  WILD   │ │                                               │
+│ └──────────┘ │                                               │
+│              │                                               │
+│ [+ NEW AGENT] │                                               │
+├──────────────┤                                               │
+│   WORKSPACES │                                               │
+│ ┌──────────┐ │                                               │
+│ │E-Commerce│ │                                               │
+│ │  App     │ │                                               │
+│ └──────────┘ │                                               │
+│              │                                               │
+│ [+ PROJECT]  │                                               │
+├──────────────┤                                               │
+│   SOURCES    │  [MCP Integration]                           │
+│ ┌──────────┐ │                                               │
+│ │🔌 GitHub │ │                                               │
+│ │   MCP    │ │                                               │
+│ └──────────┘ │                                               │
+│ ┌──────────┐ │                                               │
+│ │🗄️ Postgres│ │                                               │
+│ │   MCP    │ │                                               │
+│ └──────────┘ │                                               │
+│              │                                               │
+│ [+ ADD MCP]  │                                               │
+└──────────────┴───────────────────────────────────────────────┘
+```
 
-## File Organization
+---
 
-**Botserver (Backend):**
+## Part VI: Implementation Phases
+
+### Milestone 0: Security & Deployment Infrastructure (Week 0)
+
+**Day 1-2:** Security Fixes
+- Fix all unsafe `unwrap()` calls
+- Address dependency vulnerabilities
+- Verify CSRF & security headers
+
+**Day 3-4:** Deployment Router
+- `botserver/src/deployment/mod.rs`
+- DeploymentTarget enum
+- DeploymentRouter implementation
+
+**Day 5-6:** Forgejo Integration
+- `botserver/src/deployment/forgejo.rs`
+- ForgejoClient implementation
+- CI/CD workflow generation
+
+**Day 7:** Deployment UI
+- `botui/ui/suite/partials/vibe-deployment.html`
+- Deployment modal
+- Integration into Vibe
+
+**Success Criteria:**
+- ✅ Zero `unwrap()` in production code
+- ✅ `cargo audit` passes
+- ✅ Can deploy internally to /apps/{name}
+- ✅ Can deploy externally to Forgejo
+- ✅ CI/CD pipeline auto-generates
+
+---
+
+### Milestone 1: Core Editor (Week 1)
+
+- Phase 1 complete (Monaco integration)
+
+**Success Criteria:**
+- Monaco loads < 2 seconds
+- 5+ syntax highlighters work
+- Multi-file tabs functional
+
+---
+
+### Milestone 2: Database & Git (Week 2)
+
+- Phase 2 complete (Database UI)
+- Phase 3 complete (Git Operations + Forgejo)
+
+**Success Criteria:**
+- Schema visualizer displays all tables
+- Query builder generates valid SQL
+- Git status shows changed files
+- Forgejo sync works
+
+---
+
+### Milestone 3: Browser & Workspace (Week 3)
+
+- Phase 4 complete (Browser Automation)
+- Phase 5 complete (Multi-File Editing)
+
+**Success Criteria:**
+- Can navigate to any URL
+- Recording generates valid tests
+- 10+ files open in tabs
+- Split view supports 2-4 panes
+
+---
+
+### Milestone 4: Terminal & Templates (Week 4)
+
+- Phase 6 complete (Enhanced Terminal)
+- Phase 7 complete (CRM Templates)
+
+**Success Criteria:**
+- Interactive shell works
+- Multiple terminals run simultaneously
+- 3+ CRM templates available
+- Generation takes < 30 seconds
+
+---
+
+## Part VII: File Organization
+
+### Botserver (Backend)
+
 ```
 botserver/src/
   deployment/           # NEW - Deployment infrastructure
@@ -1569,16 +1838,16 @@ botserver/src/
     api.rs              # Deployment API endpoints
     templates.rs        # CI/CD workflow templates
   api/
-    editor.rs
-    database.rs
-    git.rs              # UPDATED - Add Forgejo git operations
+    editor.rs           # NEW - Code editor API
+    database.rs         # NEW - Database UI API
+    git.rs              # NEW - Git operations API
   browser/
-    mod.rs              # BrowserSession, BrowserManager
-    recorder.rs         # ActionRecorder
-    validator.rs        # TestValidator
-    api.rs              # HTTP endpoints
-    test_generator.rs
-  templates/
+    mod.rs              # NEW - BrowserSession, BrowserManager
+    recorder.rs         # NEW - ActionRecorder
+    validator.rs        # NEW - TestValidator
+    api.rs              # NEW - HTTP endpoints
+    test_generator.rs   # NEW - Test script generator
+  templates/            # NEW - CRM templates
     crm/
       sales.json
       real_estate.json
@@ -1591,40 +1860,210 @@ botserver/src/
     knowledge_base.rs
 ```
 
-**Botui (Frontend):**
+### Botui (Frontend)
+
 ```
 botui/ui/suite/
   partials/
-    vibe.html                    # UPDATED - Add deploy button
+    vibe.html                    # EXISTING - Main Vibe UI
     vibe-deployment.html         # NEW - Deployment modal
-    editor.html
-    database.html
-    git-status.html              # UPDATED - Add Forgejo status
-    git-diff.html
-    browser-controls.html
-    terminal.html
-    template-gallery.html
+    vibe-mcp-panel.html          # NEW - MCP panel
+    editor.html                  # NEW - Code editor
+    database.html                # NEW - Database UI
+    git-status.html              # NEW - Git status
+    git-diff.html                # NEW - Diff viewer
+    browser-controls.html        # NEW - Browser automation
+    terminal.html                # NEW - Terminal
+    template-gallery.html        # NEW - Template gallery
   js/
     deployment.js                # NEW - Deployment logic
-    editor.js
-    database.js
-    git.js                       # UPDATED - Add Forgejo operations
-    browser.js
-    terminal.js
-    templates.js
+    editor.js                    # NEW - Monaco integration
+    database.js                  # NEW - Database UI
+    git.js                       # NEW - Git operations
+    browser.js                   # NEW - Browser automation
+    terminal.js                  # NEW - Terminal
+    templates.js                 # NEW - Templates
   css/
     deployment.css               # NEW - Deployment styles
-    editor.css
-    database.css
-    git.css
-    browser.css
-    terminal.css
-    templates.css
+    editor.css                   # NEW - Editor styles
+    database.css                 # NEW - Database styles
+    git.css                      # NEW - Git styles
+    browser.css                  # NEW - Browser styles
+    terminal.css                 # NEW - Terminal styles
+    templates.css                # NEW - Template styles
+  vibe/
+    agents-sidebar.css           # EXISTING
+    mcp-panel.css                # NEW - MCP panel styles
 ```
 
-## Dependencies
+---
 
-**Already in Workspace:**
+## Part VIII: Testing Strategy
+
+### Unit Tests
+- All new modules need unit tests
+- Test coverage > 80%
+- Location: `botserver/src/<module>/tests.rs`
+
+### Integration Tests
+- End-to-end workflows
+- Location: `bottest/tests/integration/`
+
+### E2E Tests
+- Use chromiumoxide (bottest infrastructure)
+- Location: `bottest/tests/e2e/`
+- Test scenarios:
+  - Generate CRM from template
+  - Deploy internally to /apps/{name}
+  - Deploy externally to Forgejo
+  - Edit in Monaco editor
+  - View database schema
+  - Create git commit
+  - Record browser test
+
+---
+
+## Part IX: Rollout Plan
+
+### Week 0: Security & Deployment (CRITICAL)
+- **Day 1-2:** Security fixes
+- **Day 3-4:** Deployment Router
+- **Day 5-6:** Forgejo Integration
+- **Day 7:** Deployment UI
+
+### Week 1: Code Editor
+- Monaco integration
+- File tree
+- Tab management
+
+### Week 2: Database & Git
+- Schema visualizer
+- Query builder
+- Git operations
+- Forgejo sync
+
+### Week 3: Browser & Workspace
+- Browser automation UI
+- Multi-file editing
+- Split-pane layout
+
+### Week 4: Terminal & Templates
+- Enhanced terminal
+- CRM templates
+- Template gallery
+
+---
+
+## Part X: Success Metrics
+
+### Security Milestones
+- ✅ Zero `unwrap()` in production code
+- ✅ `cargo audit` passes
+- ✅ All endpoints have CSRF + security headers
+
+### Deployment Infrastructure
+- ✅ Internal deployment < 30 seconds
+- ✅ External Forgejo deployment < 2 minutes
+- ✅ CI/CD pipeline auto-generates
+- ✅ Both models accessible from Vibe UI
+
+### MCP Integration
+- ✅ MCP panel visible in Vibe sidebar
+- ✅ Can enable/disable servers
+- ✅ Can view available tools
+- ✅ Can add new servers
+
+### Code Editor
+- Monaco loads < 2 seconds
+- 5+ syntax highlighters work
+- Multi-file tabs functional
+- Auto-save succeeds
+
+### Database UI
+- Schema visualizer displays all tables
+- Query builder generates valid SQL
+- Data grid supports inline edits
+- Export works correctly
+
+### Git Operations
+- Git status shows changed files
+- Diff viewer shows side-by-side
+- Commit workflow works end-to-end
+- Forgejo sync succeeds
+
+### Browser Automation
+- Can navigate to any URL
+- Element picker captures selectors
+- Recording generates valid tests
+- Screenshots capture correctly
+
+### Multi-File Workspace
+- 10+ files open in tabs
+- Split view supports 2-4 panes
+- File comparison works
+- Project search is fast (< 1s for 100 files)
+
+### Terminal
+- Interactive shell works
+- Can run vim, top, etc.
+- Multiple terminals run simultaneously
+- File transfer works
+
+### CRM Templates
+- 3+ CRM templates available
+- Generation takes < 30 seconds
+- Generated CRMs are fully functional
+- Industry-specific features work
+
+---
+
+## Conclusion
+
+The VibeCode platform has a **powerful backend** capable of generating full applications via LLM. The main gaps are in **frontend user experience**, **security hardening**, and **deployment routing**.
+
+**Critical Path:**
+1. ⚠️ **Week 0:** Security fixes + Deployment infrastructure
+2. 🔌 **Week 0.5:** MCP integration in Vibe
+3. 📝 **Week 1:** Monaco code editor
+4. 🗄️ **Week 2:** Database UI + Git operations
+5. 🌐 **Week 3:** Browser automation + Multi-file workspace
+6. 🖥️ **Week 4:** Terminal + CRM templates
+
+Once these phases are complete, VibeCode will match or exceed Claude Code's capabilities while offering:
+
+✅ **Dual deployment model** (Internal GB Apps + External Forgejo Projects)
+✅ **Multi-user SaaS deployment**
+✅ **Visual app building** (Vibe Builder)
+✅ **Enterprise-grade multi-agent orchestration**
+✅ **Pure Rust backend** (no Node.js dependency)
+✅ **Integrated MCP servers** (extensible tools)
+✅ **Integrated browser automation** (chromiumoxide)
+✅ **Professional development environment**
+
+**Total Estimated Effort:** 165-205 hours (~4-5 weeks with 1 developer)
+
+---
+
+## Appendix: Code Quality Standards
+
+**MUST Follow (per AGENTS.md):**
+1. ✅ **Error Handling** - NO panics, use `?` operator
+2. ✅ **Safe Commands** - Use `SafeCommand` wrapper
+3. ✅ **Error Sanitization** - Use `ErrorSanitizer`
+4. ✅ **SQL Safety** - Use `sql_guard`
+5. ✅ **Rate Limiting** - Per-IP and per-User limits
+6. ✅ **CSRF Protection** - CSRF tokens on state-changing endpoints
+7. ✅ **Security Headers** - CSP, HSTS, X-Frame-Options
+8. ✅ **No CDNs** - All assets local
+9. ✅ **File Size** - Max 450 lines per file
+10. ✅ **Clippy Clean** - 0 warnings, no `#[allow()]`
+
+---
+
+## Appendix: Dependencies
+
+### Backend (Already in Workspace)
+
 ```toml
 [dependencies]
 chromiumoxide = "0.7"  # Browser automation
@@ -1635,165 +2074,18 @@ git2 = "0.18"           # Git operations
 reqwest = { version = "0.11", features = ["json"] }  # HTTP client
 ```
 
-**Frontend:**
+### Frontend (Download & Serve Locally)
+
+```bash
+# Code editor
+npm install monaco-editor@0.45.0
+
+# Terminal (already vendor file exists)
+# xterm.js@5.3.0
 ```
-monaco-editor@0.45.0    # Code editor
-xterm.js@5.3.0          # Terminal (already vendor file)
-```
 
 ---
 
-# PART IV: Testing Strategy
-
-## Unit Tests
-- All new modules need unit tests
-- Test coverage > 80%
-- Location: `botserver/src/<module>/tests.rs`
-
-## Integration Tests
-- End-to-end workflows
-- Location: `bottest/tests/integration/`
-
-## E2E Tests
-- Use chromiumoxide (bottest infrastructure)
-- Location: `bottest/tests/e2e/`
-- Test scenarios:
-  - Generate CRM from template
-  - Deploy to internal GB Platform
-  - Deploy to external Forgejo
-  - Edit in Monaco editor
-  - View database schema
-  - Create git commit
-  - Record browser test
-
----
-
-# PART V: Rollout Plan
-
-## Milestone 0: Deployment Infrastructure (Week 0)
-- **Day 1-3:** Phase 0.1 - Deployment Router
-- **Day 4-5:** Phase 0.2 - Forgejo Integration
-- **Day 6-7:** Phase 0.3 - Deployment UI
-
-**Success Criteria:**
-- ✅ Can deploy app internally to /apps/{name}
-- ✅ Can deploy app externally to Forgejo
-- ✅ CI/CD pipeline auto-generated
-- ✅ Deployment choice works in Vibe UI
-
-## Milestone 1: Core Editor (Week 1)
-- Phase 1 complete (Monaco integration)
-
-## Milestone 2: Database & Git (Week 2)
-- Phase 2 complete (Database UI)
-- Phase 3 complete (Git Operations + Forgejo)
-
-## Milestone 3: Browser & Workspace (Week 3)
-- Phase 4 complete (Browser Automation)
-- Phase 5 complete (Multi-File Editing)
-
-## Milestone 4: Terminal & Templates (Week 4)
-- Phase 6 complete (Enhanced Terminal)
-- Phase 7 complete (CRM Templates with dual deployment)
-
----
-
-# PART VI: Success Metrics
-
-## Deployment Infrastructure (Phase 0)
-- Internal deployment succeeds in < 30 seconds
-- External Forgejo deployment succeeds in < 2 minutes
-- CI/CD pipeline auto-generates correctly
-- Both deployment models accessible from Vibe UI
-- Can switch between internal/external deployment
-
-## Phase 1: Code Editor
-- Monaco loads < 2 seconds
-- 5+ syntax highlighters work
-- Multi-file tabs functional
-- Auto-save succeeds
-
-## Phase 2: Database UI
-- Schema visualizer displays all tables
-- Query builder generates valid SQL
-- Data grid supports inline edits
-- Export functionality works
-
-## Phase 3: Git Operations
-- Git status shows changed files
-- Diff viewer shows side-by-side
-- Commit workflow works
-- Branch switching succeeds
-
-## Phase 4: Browser Automation
-- Can navigate to any URL
-- Element picker captures selectors
-- Recording generates valid tests
-- Screenshots capture correctly
-
-## Phase 5: Multi-File Workspace
-- 10+ files open in tabs
-- Split view supports 2-4 panes
-- File comparison works
-- Project search is fast (< 1s for 100 files)
-
-## Phase 6: Terminal
-- Interactive shell works
-- Can run vim, top, etc.
-- Multiple terminals run simultaneously
-- File transfer works
-
-## Phase 7: CRM Templates
-- 3+ CRM templates available
-- Generation takes < 30 seconds
-- Generated CRMs are fully functional
-- Industry-specific features work
-- Templates support both deployment models
-
----
-
-# Conclusion
-
-The **critical foundation** is the **deployment infrastructure (Phase 0)**. The platform must support:
-
-1. **Internal GB Apps** - Quick prototypes using GB APIs and shared resources
-2. **External Forgejo Projects** - Production apps with independent infrastructure and CI/CD
-
-**Implementation Priority:**
-1. ⚠️ **Phase 0** - Deployment Infrastructure (CRITICAL - Week 0)
-   - Phase 0.1: Deployment Router
-   - Phase 0.2: Forgejo Integration
-   - Phase 0.3: Deployment UI
-
-2. 📝 **Phase 1** - Code Editor (Week 1)
-
-3. 🗄️ **Phase 2** - Database UI (Week 2)
-
-4. 🐙 **Phase 3** - Git Operations + Forgejo (Week 2)
-
-5. 🌐 **Phase 4** - Browser Automation (Week 3)
-
-6. 📂 **Phase 5** - Multi-File Workspace (Week 3)
-
-7. 🖥️ **Phase 6** - Terminal (Week 4)
-
-8. 📇 **Phase 7** - CRM Templates (Week 4)
-
-Once Phase 0 is complete, VibeCode will be able to **deploy apps both internally and externally**, giving users the flexibility to choose the right deployment model for their use case.
-
-**Total Estimated Effort:**
-- Phases 1-7: 125-155 hours (~3-4 weeks with 1 developer)
-- Phase 0: +40-50 hours
-- **Final Total:** 165-205 hours (~4-5 weeks with 1 developer)
-
-The BotUI platform already has a **powerful backend** capable of generating full applications via LLM. These phases add the **deployment infrastructure** and **professional UI tools** to make it a complete development environment with dual deployment capabilities.
-
-Once complete, VibeCode will match or exceed Claude Code's capabilities while offering:
-
-✅ **Multi-user SaaS deployment**
-✅ **Visual app building** (Vibe Builder)
-✅ **Enterprise-grade multi-agent orchestration**
-✅ **Pure Rust backend** (no Node.js dependency)
-✅ **Integrated browser automation** (chromiumoxide)
-✅ **Dual deployment model** (Internal GB Platform + External Forgejo ALM)
-✅ **Professional development environment**
+**Document Version:** 3.0
+**Last Updated:** 2025-02-28
+**Status:** Ready for Implementation

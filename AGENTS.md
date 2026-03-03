@@ -1,7 +1,9 @@
 # General Bots AI Agent Guidelines
 8080 is server 3000 is client ui 
+if you are in trouble with some tool, please go to the ofiical website to get proper install or instructions
 To test web is http://localhost:3000 (botui!)
-Use apenas a lingua culta.
+Use apenas a lingua culta ao falar .
+test login here http://localhost:3000/suite/auth/login.html
 > **⚠️ CRITICAL SECURITY WARNING**
 I AM IN DEV ENV, but sometimes, pasting from PROD, do not treat my env as prod! Just fix, to me and push to CI. So I can test in PROD, for a while.
 >Use Playwrigth MCP to start localhost:3000/<bot> now.

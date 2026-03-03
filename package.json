@@ -1,17 +1,5 @@
 {
-  "name": "gb",
-  "version": "1.0.0",
-  "main": "index.js",
-  "author": "Rodrigo Rodriguez (Pragmatismo) <me@rodrigorodriguez.com>",
-  "license": "MIT",
-  "devDependencies": {
-    "@playwright/test": "^1.58.2",
-    "@types/node": "^25.2.0"
-  },
-  "scripts": {},
   "dependencies": {
-    "jsonwebtoken": "^9.0.3",
-    "node-fetch": "^3.3.2",
-    "ws": "^8.19.0"
+    "monaco-editor": "^0.45.0"
   }
 }
