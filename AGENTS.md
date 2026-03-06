@@ -334,6 +334,23 @@ After UI interactions, validate backend state via `psql` or `tail` logs.
 - **Error handling**: ALL error paths must have tests
 - **Security**: All security guards must have tests
 
+### WhatsApp Integration Testing
+
+#### Prerequisites
+1. **Enable WhatsApp Feature**: Build botserver with whatsapp feature enabled:
+   ```bash
+   cargo build -p botserver --bin botserver --features whatsapp
+   ```
+2. **Bot Configuration**: Ensure the bot has WhatsApp credentials configured in `config.csv`:
+   - `whatsapp-api-key` - API key from Meta Business Suite
+   - `whatsapp-verify-token` - Custom token for webhook verification
+   - `whatsapp-phone-number-id` - Phone Number ID from Meta
+   - `whatsapp-business-account-id` - Business Account ID from Meta
+
+#### Using Localtunnel (lt) as Reverse Proxy
+
+# Check database for message storage
+psql -h localhost -U postgres -d botserver -c "SELECT * FROM messages WHERE bot_id = '<bot_id>' ORDER BY created_at DESC LIMIT 5;"
 ---
 
 ## 🐛 Debugging Rules
