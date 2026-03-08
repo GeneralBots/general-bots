@@ -1,337 +1,307 @@
-# Configuração WhatsApp - Bot Salesianos
+# WhatsApp - Bot Salesianos
 
-## Status Atual
+## Status: Operacional
 
-| Campo | Valor | Status |
-|-------|-------|--------|
-| Phone Number | +15558293147 | ✅ |
-| Phone Number ID | 323250907549153 | ✅ Configurado |
-| Business Account ID | 1261667644771701 | ✅ Configurado |
-| APP ID | 948641861003702 | ✅ |
-| Client Token | 84ba0c232681678376c7693ad2252763 | ⚠️ Temporário |
-| API Key (Permanent Token) | EAAQdlso6aM8B... (configured) | ✅ Configurado |
-| Verify Token | webhook_verify_salesianos_2024 | ✅ Configurado |
+| Campo | Valor |
+|-------|-------|
+| Bot ID | `32c579e5-609b-4a07-8599-4e0fccc4d764` |
+| Phone | +15558293147 |
+| Phone ID | 323250907549153 |
+| Business ID | 1261667644771701 |
 
 ---
 
-## 📱 Comandos Disponíveis
+## Comandos
 
-### `/clear` - Limpar Histórico
-
-O comando `/clear` permite ao usuário limpar seu histórico de conversa com o bot.
-
-**Uso**: Digite `/clear` no WhatsApp
-
-**Comportamento**:
-- Remove todas as mensagens anteriores da sessão
-- Mantém a sessão ativa (não remove o usuário)
-- Envia confirmação ao usuário: "✅ Histórico de conversa limpo! Posso ajudar com algo mais?"
-
-**Implementação** (`botserver/src/whatsapp/mod.rs:318-353`):
-```rust
-if content.trim().to_lowercase() == "/clear" {
-    match find_or_create_session(&state, bot_id, &phone, &name).await {
-        Ok((session, _)) => {
-            clear_session_history(&state, &session.id).await?;
-            // Send confirmation
-        }
-        Err(e) => error!("Failed to get session for /clear: {}", e),
-    }
-    return Ok(());
-}
-```
+- `/clear` - Limpa histórico da conversa
 
 ---
 
-## ✅ Problemas Resolvidos (2026-03-07)
+## Streaming
 
-### Problema 6: Conteúdo pós-lista enviado junto com a lista (RESOLVIDO - 2026-03-07)
+1. Mensagens sem lista: enviar a cada 3 parágrafos
+2. Mensagens com lista: **ISOLAR como mensagem única** (sem texto antes ou depois)
+3. Limite máximo: 4000 caracteres por mensagem
 
-**Sintoma**: Quando uma lista terminava e vinha um novo parágrafo (ex: "Sua Filosofia..."), tudo era enviado como uma mensagem só
+### Exemplo de Agrupamento Correto
 
-**Causa raiz**: A lógica verificava `has_list` mas não detectava quando a lista havia TERMINADO
+**Resposta completa do bot:**
+```
+Olá! 😊
 
-**Solução aplicada** (`botserver/src/whatsapp/mod.rs:762-832`):
-- ✅ Adicionado loop `'process_buffer` aninhado
-- ✅ Usa `extract_complete_list()` para detectar fim da lista
-- ✅ Envia lista completa separadamente
-- ✅ Re-processa conteúdo restante imediatamente (não espera próximo chunk)
+Infelizmente, não tenho a informação específica sobre o horário de funcionamento da Escola Salesiana no momento.
 
-```rust
-'process_buffer: loop {
-    let has_list = contains_list(&buffer);
-    if has_list {
-        if let Some((list_content, remaining)) = extract_complete_list(&buffer) {
-            // List ended! Send list separately, keep remaining in buffer
-            send_part(&adapter, &phone, list_content, false).await;
-            buffer = remaining;
-            continue 'process_buffer; // Process remaining content NOW
-        }
-        // ... rest of list handling
-    } else {
-        // Non-list content handling (Sua Filosofia... goes here)
-    }
-}
+Para obter essa informação, você pode:
+1. *Entrar em contato com a secretaria* - Posso te ajudar a enviar uma mensagem perguntando sobre os horários
+2. *Agendar uma visita* - Assim você conhece a escola pessoalmente e obtém todas as informações necessárias
+
+Gostaria que eu te ajudasse com alguma dessas opções? Se quiser entrar em contato com a secretaria, preciso apenas de:
+- Seu nome
+- Telefone
+- Email
+- Sua pergunta sobre os horários
+
+Ou, se preferir, posso agendar uma visita para você conhecer a escola! 🏫
+
+O que prefere?
 ```
 
-### Problema 5: Embedding Service HTTP 500 (RESOLVIDO - 2026-03-07)
+**Deve ser enviado como 5 mensagens separadas:**
 
-**Sintoma**: Erro HTTP 500 do embedding service causava falha na busca semântica
+**Mensagem 1:**
+```
+Olá! 😊
 
-**Solução aplicada** (`botserver/src/llm/cache.rs:656-709`):
-- ✅ Implementado retry logic com exponential backoff
-- ✅ 3 tentativas com delays: 500ms, 1000ms, 2000ms
-- ✅ Retry apenas em HTTP 5xx e erros de rede
-- ✅ Timeout de 30 segundos por requisição
+Infelizmente, não tenho a informação específica sobre o horário de funcionamento da Escola Salesiana no momento.
 
-```rust
-const MAX_RETRIES: u32 = 3;
-const INITIAL_DELAY_MS: u64 = 500;
-// Exponential backoff: 500ms, 1000ms, 2000ms
-let delay_ms = INITIAL_DELAY_MS * (1 << (attempt - 1));
+Para obter essa informação, você pode:
 ```
 
-### Problema 4: Listas separadas item por item (RESOLVIDO - 2026-03-07)
-
-**Sintoma**: Cada item de lista era enviado como mensagem separada
-
-**Solução aplicada** (`botserver/src/whatsapp/mod.rs:634-809`):
-- ✅ Lógica simplificada: se buffer contém lista, SÓ envia quando `is_final`
-- ✅ Lista inteira é acumulada antes do envio
-- ✅ Mensagens longas (>4000 chars) são divididas com `split_message_smart`
-
-```rust
-let has_list = contains_list(&buffer);
-if has_list {
-    // With lists: only flush when final or too long
-    if is_final || buffer.len() >= MAX_WHATSAPP_LENGTH {
-        // send complete list as one message
-    }
-} else {
-    // No list: use normal paragraph-based flushing
-}
+**Mensagem 2 (LISTA ISOLADA):**
+```
+1. *Entrar em contato com a secretaria* - Posso te ajudar a enviar uma mensagem perguntando sobre os horários
+2. *Agendar uma visita* - Assim você conhece a escola pessoalmente e obtém todas as informações necessárias
 ```
 
-### Problema 3: Mensagens duplicadas em respostas (RESOLVIDO - 2026-03-07)
+**Mensagem 3:**
+```
+Gostaria que eu te ajudasse com alguma dessas opções? Se quiser entrar em contato com a secretaria, preciso apenas de:
+```
 
-**Sintoma**: Bot enviava a mesma mensagem duas vezes seguidas no WhatsApp
+**Mensagem 4 (LISTA ISOLADA):**
+```
+- Seu nome
+- Telefone
+- Email
+- Sua pergunta sobre os horários
+```
 
-**Causa raiz**:
-1. O `stream_response` enviava chunks de streaming com `is_complete: false` e depois enviava uma resposta final com `is_complete: true` contendo TODO o conteúdo acumulado (`full_response`)
-2. WhatsApp faz retry de webhooks, causando processamento duplicado da mesma mensagem
+**Mensagem 5:**
+```
+Ou, se preferir, posso agendar uma visita para você conhecer a escola! 🏫
 
-**Solução aplicada**:
-- ✅ Modificado `botserver/src/core/bot/mod.rs:980-983` para enviar conteúdo vazio na resposta final
-- ✅ A resposta final agora serve apenas como sinal de "streaming completo"
-- ✅ Removida variável `tool_was_executed` que não era mais necessária
-- ✅ Implementado deduplicação de mensagens por ID usando cache Redis (`botserver/src/whatsapp/mod.rs:263-284`)
-  - Usa `SET key value NX EX 300` para garantir processamento único
-  - TTL de 5 minutos para limpeza automática
+O que prefere?
+```
 
-**Resultado**: Mensagens agora são enviadas apenas uma vez
-
-### Problema 1: Mensagens ignoradas pelo bot (RESOLVIDO)
-
-**Sintoma**: Mensagens eram recebidas mas ignoradas pelo bot (query vazia no KB)
-
-**Causa raiz**: JSON deserialization estava falhando - array `messages` aparecia vazio
-
-**Solução aplicada**:
-- ✅ Adicionado debug logging em `handle_webhook()` e `process_incoming_message()`
-- ✅ Verificado estrutura do payload JSON
-- ✅ Testado com script de simulação
-
-**Resultado**: Mensagens agora são processadas corretamente
-
-### Problema 2: Listas duplicadas/multipartes (RESOLVIDO)
-
-**Sintoma**: Listas (li/ul) eram enviadas em chunks separados, causando duplicação
-
-**Causa raiz**: Lógica de streaming enviava mensagens em pedaços durante a geração
-
-**Solução aplicada**:
-- ✅ Simplificado streaming em `botserver/src/whatsapp/mod.rs:597-623`
-- ✅ Removido chunking - agora acumula todo conteúdo antes de enviar
-- ✅ Mensagem só é enviada quando `is_final = true`
-
-**Resultado**: Listas e todo conteúdo enviado como uma mensagem completa
+**Regras:**
+- ✅ Cada lista = **1 mensagem ISOLADA** (nunca misturar com texto)
+- ✅ Texto antes da lista = mensagem separada
+- ✅ Texto depois da lista = mensagem separada
+- ✅ Listas nunca são quebradas no meio
 
 ---
 
-## Código Modificado
+## Testar Webhook (Simular Callback)
 
-### Arquivo: `botserver/src/whatsapp/mod.rs`
-
-**Função**: `route_to_bot()` - Streaming com particionamento inteligente
-
-```rust
-tokio::spawn(async move {
-    let mut buffer = String::new();
-    const MAX_WHATSAPP_LENGTH: usize = 4000;
-    const MIN_FLUSH_PARAGRAPHS: usize = 3;
-
-    // Helper functions
-    fn is_list_item(line: &str) -> bool { /* ... */ }
-    fn contains_list(text: &str) -> bool { /* ... */ }
-
-    while let Some(response) = rx.recv().await {
-        let is_final = response.is_complete;
-        if !response.content.is_empty() {
-            buffer.push_str(&response.content);
-        }
-
-        let has_list = contains_list(&buffer);
-
-        if has_list {
-            // List: ONLY flush when final or too long
-            if is_final || buffer.len() >= MAX_WHATSAPP_LENGTH {
-                // Send complete list as one message
-            }
-        } else {
-            // No list: paragraph-based flushing
-            let should_flush = buffer.len() >= MAX_WHATSAPP_LENGTH ||
-                (paragraph_count >= MIN_FLUSH_PARAGRAPHS && ends_with_paragraph) ||
-                is_final;
-
-            if should_flush { /* send */ }
-        }
-    }
-});
-```
-
-### Arquivo: `botserver/src/llm/cache.rs`
-
-**Função**: `get_embedding()` - Retry com backoff exponencial
-
-```rust
-const MAX_RETRIES: u32 = 3;
-const INITIAL_DELAY_MS: u64 = 500;
-
-for attempt in 0..MAX_RETRIES {
-    if attempt > 0 {
-        let delay_ms = INITIAL_DELAY_MS * (1 << (attempt - 1));
-        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-    }
-
-    match request.timeout(Duration::from_secs(30)).send().await {
-        Ok(response) if response.status().is_success() => return Ok(embedding),
-        Ok(response) if response.status().as_u16() >= 500 => continue, // retry
-        Err(_) => continue, // network error - retry
-        _ => return Err(...), // non-retriable
-    }
-}
-```
-
-**Mudanças principais**:
-- ✅ Adicionado: Retry logic para embedding service
-- ✅ Adicionado: Particionamento inteligente de mensagens
-- ✅ Adicionado: `split_message_smart` para mensagens longas
-- ✅ Adicionado: Detecção de listas para envio completo
-
----
-
-## Fase 1: Configuração Básica ✅
-
-- [x] **Obter Permanent Access Token** - ✅ CONFIGURADO
-- [x] **Verificar config.csv atual** - ✅ TODOS OS CAMPOS CONFIGURADOS
-  - Arquivo: `/opt/gbo/data/salesianos.gbai/salesianos.gbot/config.csv`
-  - Campos: `whatsapp-phone-number-id`, `whatsapp-business-account-id`, `whatsapp-api-key`, `whatsapp-verify-token`
-
----
-
-## Fase 2: Configuração do Webhook (PENDENTE PRODUÇÃO)
-
-- [ ] **Configurar webhook na Meta Business Suite**
-  - URL de produção: `https://<seu-dominio>/webhook/whatsapp/<bot_id>`
-  - Verify Token: `webhook_verify_salesianos_2024`
-  - Subscrever eventos: `messages`, `messaging_postbacks`
-
-- [ ] **Verificar se webhook está acessível externamente**
-  - Configurar reverse proxy (nginx/traefik)
-  - Configurar SSL/TLS (obrigatório para produção)
-
-- [ ] **Testar verificação do webhook**
-  ```bash
-  curl "https://<seu-dominio>/webhook/whatsapp/<bot_id>?hub.mode=subscribe&hub.challenge=test&hub.verify_token=webhook_verify_salesianos_2024"
-  ```
-
----
-
-## Fase 3: Testes
-
-### Teste Local ✅
-
-- [x] **Script de teste**: `/tmp/test_whatsapp_webhook.sh`
-- [x] **Webhook local funcionando**: `http://localhost:8080/webhook/whatsapp/<bot_id>`
-- [x] **Extração de conteúdo**: Funcionando
-- [x] **Streaming de listas**: Corrigido
-
-### Teste Produção (PENDENTE)
-
-- [ ] **Testar com mensagem real do WhatsApp**
-  - Enviar mensagem para +15558293147
-  - Verificar se resposta vem completa (sem duplicação)
-
-### Comandos de Debug
+Script de teste em `/tmp/test_whatsapp.sh`:
 
 ```bash
-# Ver mensagens WhatsApp em tempo real
-tail -f botserver.log | grep -iE "(whatsapp|Extracted|content)"
+#!/bin/bash
+# Testa o webhook do WhatsApp simulando uma mensagem
 
-# Testar webhook localmente
-/tmp/test_whatsapp_webhook.sh
+BOT_ID="32c579e5-609b-4a07-8599-4e0fccc4d764"
+FROM="5521972102162"  # Número de teste
 
-# Verificar configuração do bot
-cat /opt/gbo/data/salesianos.gbai/salesianos.gbot/config.csv | grep whatsapp
+curl -X POST "http://localhost:8080/webhook/whatsapp/${BOT_ID}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "object": "whatsapp_business_account",
+    "entry": [{
+      "id": "1261667644771701",
+      "changes": [{
+        "field": "messages",
+        "value": {
+          "messaging_product": "whatsapp",
+          "metadata": {
+            "display_phone_number": "15558293147",
+            "phone_number_id": "323250907549153"
+          },
+          "contacts": [{
+            "wa_id": "'${FROM}'",
+            "profile": { "name": "Teste Usuario" }
+          }],
+          "messages": [{
+            "id": "test_msg_'$(date +%s)'",
+            "from": "'${FROM}'",
+            "timestamp": "'$(date +%s)'",
+            "type": "text",
+            "text": { "body": "Olá, como posso ajudar?" }
+          }]
+        }
+      }]
+    }]
+  }'
+```
 
-# Verificar saúde do servidor
-curl http://localhost:8080/health
+Executar teste:
+```bash
+bash /tmp/test_whatsapp.sh
 ```
 
 ---
 
-## Fase 4: Produção
+## Testar Comando /clear
 
-- [ ] **Configurar SSL/TLS**
-  - Certificado válido para o domínio
-  - HTTPS obrigatório para webhooks
+```bash
+BOT_ID="32c579e5-609b-4a07-8599-4e0fccc4d764"
+FROM="5521972102162"
 
-- [ ] **Rate Limiting**
-  - Verificar limites da API do WhatsApp
-  - Implementar throttling se necessário
-
-- [ ] **Monitoramento**
-  - Alertas para falhas de webhook
-  - Logs estruturados
-
-- [ ] **Backup do config.csv**
-  - Salvar configurações em local seguro
-  - Documentar credenciais (exceto secrets)
+curl -X POST "http://localhost:8080/webhook/whatsapp/${BOT_ID}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "object": "whatsapp_business_account",
+    "entry": [{
+      "id": "1261667644771701",
+      "changes": [{
+        "field": "messages",
+        "value": {
+          "messaging_product": "whatsapp",
+          "metadata": {
+            "display_phone_number": "15558293147",
+            "phone_number_id": "323250907549153"
+          },
+          "contacts": [{
+            "wa_id": "'${FROM}'",
+            "profile": { "name": "Teste Usuario" }
+          }],
+          "messages": [{
+            "id": "test_clear_'$(date +%s)'",
+            "from": "'${FROM}'",
+            "timestamp": "'$(date +%s)'",
+            "type": "text",
+            "text": { "body": "/clear" }
+          }]
+        }
+      }]
+    }]
+  }'
+```
 
 ---
 
-## Referências
+## Debug
 
-- [WhatsApp Business API Docs](https://developers.facebook.com/docs/whatsapp/business-platform-api)
-- [Meta Business Suite](https://business.facebook.com/)
-- Arquivo de config: `/opt/gbo/data/salesianos.gbai/salesianos.gbot/config.csv`
-- Webhook handler: `botserver/src/whatsapp/mod.rs`
-- Test script: `/tmp/test_whatsapp_webhook.sh`
+```bash
+# Verificar servidor
+curl http://localhost:8080/health
 
----
+# Monitorar logs
+tail -f botserver.log | grep -iE "(whatsapp|Embedding)"
 
-## Notas
-
-- **Client Token** fornecido é temporário - necessário Permanent Access Token ✅ OBTIDO
-- Token permanente armazenado no config.csv
-- Webhook local funcionando - pendente configuração de produção
+# Verificar sessões ativas (requer acesso ao banco)
+# SELECT * FROM user_sessions WHERE bot_id = '32c579e5-609b-4a07-8599-4e0fccc4d764';
+```
 
 ---
 
-## Próximos Passos
+## Arquivos Relacionados
 
-1. [ ] Testar com mensagens reais do WhatsApp
-2. [ ] Configurar webhook na Meta Business Suite para produção
-3. [ ] Configurar SSL/TLS no servidor de produção
-4. [ ] Monitorar logs em produção
-5. [ ] Documentar processo de deploy
+- Config: `/opt/gbo/data/salesianos.gbai/salesianos.gbot/config.csv`
+- Handler: `botserver/src/whatsapp/mod.rs`
+- Adapter: `botserver/src/core/bot/channels/whatsapp.rs`
+- Cache: `botserver/src/llm/cache.rs`
+
+---
+
+## Pendências
+
+1. ~~Filtrar caracteres Markdown inválidos no WhatsApp (###, **, etc)~~ ✅ **Concluído em 2025-03-08**
+2. Configurar webhook na Meta Business Suite para produção
+3. Configurar SSL/TLS no servidor de produção
+
+---
+
+## Histórico de Correções
+
+### 2025-03-08: Sanitização de Markdown para WhatsApp
+
+**Problema**: O WhatsApp não suporta Markdown completo (headers, links formatados, etc), causando exibição incorreta de mensagens.
+
+**Solução**: Adicionada função `sanitize_for_whatsapp()` em `botserver/src/core/bot/channels/whatsapp.rs` que:
+- Remove headers Markdown (###, ##, #)
+- Converte links `[texto](url)` para `texto: url`
+- Remove sintaxe de imagem `![alt](url)`
+- Converte checkboxes `[ ]` e `[x]` para bullets
+- Remove horizontal rules (`---`, `***`)
+- Remove tags HTML
+- Limpa linhas em branco excessivas
+
+**Resultado**: Mensagens agora são exibidas corretamente no WhatsApp.
+
+### 2025-03-08: Cache Semântico
+
+**Problema**: O cache semântico estava enviando todo o histórico de conversa (10000+ chars) para o embedding, causando falsos positivos.
+
+**Solução**: Modificado `botserver/src/llm/cache.rs` para extrair apenas a última pergunta do usuário do array de mensagens.
+
+```rust
+// Antes (problemático):
+let combined_context = format!("{}\n{}", prompt, actual_messages);
+
+// Depois (corrigido):
+let latest_user_question = msgs.iter().rev()
+    .find_map(|msg| {
+        if msg.get("role") == Some("user") {
+            msg.get("content").and_then(|c| c.as_str())
+        } else { None }
+    });
+```
+
+**Resultado**: Embedding agora usa apenas ~52 chars (pergunta do usuário) em vez de 10000+ chars.
+
+### 2025-03-08: Correção de Streaming para Listas
+
+**Problema**: Listas numeradas estavam sendo quebradas em múltiplas mensagens durante o streaming, mesmo quando cabiam em uma única mensagem de 4000 caracteres.
+
+**Causa**: A detecção de lista era feita APÓS decidir fazer flush baseado em 3 parágrafos. Quando o streaming enviava chunks parciais, o código não detectava que uma lista estava começando.
+
+**Solução**: Melhorada a lógica de detecção em `botserver/src/whatsapp/mod.rs`:
+
+1. **Detecção mais precisa de listas numeradas**: Agora requer padrão `N.` ou `N)` seguido de espaço (ex: "1. Item", "10) Item")
+2. **Detecção de início de lista**: Nova função `looks_like_list_start()` detecta quando o buffer parece estar começando uma lista (header terminando em `:` ou número no início)
+3. **Logs detalhados**: Adicionado logging para debug de streaming
+
+**Resultado**: Listas agora são acumuladas corretamente e enviadas em uma única mensagem quando possível.
+
+### 2025-03-08: Detecção de Fim de Lista no Streaming
+
+**Problema**: Listas estavam sendo enviadas como mensagens únicas apenas quando o streaming terminava (`is_final`), mesmo que a lista já tivesse terminado. Isso causava atrasos na entrega de mensagens quando havia conteúdo após a lista.
+
+**Causa**: Uma vez que uma lista era detectada (`has_list = true`), o código esperava até `is_final` ou `buffer.len() >= MAX_WHATSAPP_LENGTH` para fazer flush. Não havia detecção de quando a lista terminava.
+
+**Solução**: 
+- Adicionada função `looks_like_list_end()` em `botserver/src/whatsapp/mod.rs` que detecta quando uma lista terminou (verifica se as últimas 2 linhas não-brancas não são itens de lista)
+- Modificada a lógica de streaming para fazer flush quando `list_ended = true`
+- Adicionados testes unitários para validar o novo comportamento
+
+**Resultado**: Listas agora são enviadas assim que terminam, sem esperar o streaming completar. Conteúdo após a lista é entregue prontamente, melhorando a experiência do usuário.
+
+### 2025-03-08: Isolamento de Listas como Mensagens Únicas
+
+**Problema**: Listas estavam sendo enviadas misturadas com texto antes e depois, em vez de serem isoladas como mensagens únicas. Por exemplo, "Texto introdutório\n1. Item\n2. Item\nTexto final" era enviado como uma única mensagem, quando deveria ser 3 mensagens separadas.
+
+**Causa**: A lógica de streaming acumulava todo o buffer quando detectava uma lista, sem separar o texto antes/depois da lista. O buffer era enviado como um bloco único.
+
+**Solução**: Implementado isolamento de listas em `botserver/src/whatsapp/mod.rs`:
+- Adicionada função `split_text_before_list()` para separar texto antes da lista
+- Adicionada função `split_list_from_text()` para separar lista do texto depois
+- Modificada lógica de streaming para:
+  1. Detectar quando lista termina (`list_ended = true`)
+  2. Separar texto ANTES da lista e enviar como mensagem
+  3. Separar lista e enviar como mensagem ISOLADA
+  4. Manter texto DEPOIS no buffer para próxima mensagem
+
+**Resultado**: Listas agora são enviadas como mensagens ISOLADAS, sem misturar com texto antes ou depois. Cada lista = 1 mensagem separada, melhorando a legibilidade e experiência do usuário no WhatsApp.
+
+### 2025-03-08: Remoção de Blocos de Código JavaScript
+
+**Problema**: Código de programação (JavaScript, C#, etc.) estava vazando nas mensagens do WhatsApp. Exemplos como `var telefoneDigits = new string(args.Phone.Where(char.IsDigit).ToArray());` eram enviados para os usuários, quando deveriam ser removidos.
+
+**Causa**: A função `sanitize_for_whatsapp()` em `botserver/src/core/bot/channels/whatsapp.rs` removia Markdown e HTML, mas não removia blocos de código cercados por crases (backticks).
+
+**Solução**: Adicionados padrões regex à função `sanitize_for_whatsapp()`:
+- Remove blocos de código com crases triplas: ```code```
+- Remove código inline com crase simples: `code`
+- Limpa código de programação antes de enviar para WhatsApp
+
+**Resultado**: Mensagens do WhatsApp agora estão livres de código de programação, exibindo apenas texto legível para o usuário. Código JavaScript, C#, e outras linguagens são automaticamente removidos durante a sanitização.

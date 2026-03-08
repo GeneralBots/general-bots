@@ -14,7 +14,7 @@ cargo build -p botserver
 cargo build -p botui
 
 echo "Starting botserver..."
-RUST_LOG=trace ./target/debug/botserver --noconsole > botserver.log 2>&1 &
+RUST_LOG=debug ./target/debug/botserver --noconsole > botserver.log 2>&1 &
 echo "  PID: $!"
 
 echo "Starting botui..."
