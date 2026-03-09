@@ -1,5 +1,5 @@
 # WhatsApp - Bot Salesianos
-
+respeitar AGENTS.md
 ## Status: Operacional
 
 | Campo | Valor |
@@ -205,103 +205,95 @@ tail -f botserver.log | grep -iE "(whatsapp|Embedding)"
 
 ## Pendências
 
-1. ~~Filtrar caracteres Markdown inválidos no WhatsApp (###, **, etc)~~ ✅ **Concluído em 2025-03-08**
+1. **Implementar suporte a `/webhook/whatsapp/default`** (ver TODO abaixo)
 2. Configurar webhook na Meta Business Suite para produção
 3. Configurar SSL/TLS no servidor de produção
 
 ---
 
-## Histórico de Correções
+## 📋 TODO: Default Bot Routing
 
-### 2025-03-08: Sanitização de Markdown para WhatsApp
+### Objetivo
+Permitir que a URL `/webhook/whatsapp/default` funcione como roteador dinâmico de bots baseado em comandos de usuário.
 
-**Problema**: O WhatsApp não suporta Markdown completo (headers, links formatados, etc), causando exibição incorreta de mensagens.
+### Comportamento Atual
+- ✅ `/webhook/whatsapp/{uuid}` → Rota direta para bot específico
+- ❌ `/webhook/whatsapp/default` → **FALHA** (espera UUID, não aceita "default")
 
-**Solução**: Adicionada função `sanitize_for_whatsapp()` em `botserver/src/core/bot/channels/whatsapp.rs` que:
-- Remove headers Markdown (###, ##, #)
-- Converte links `[texto](url)` para `texto: url`
-- Remove sintaxe de imagem `![alt](url)`
-- Converte checkboxes `[ ]` e `[x]` para bullets
-- Remove horizontal rules (`---`, `***`)
-- Remove tags HTML
-- Limpa linhas em branco excessivas
+### Comportamento Desejado
+1. `/webhook/whatsapp/default` → Rota para o bot default (`/opt/gbo/data/default.gbai/default.gbot`)
+2. Quando usuário digita um `whatsapp-id` (ex: "cristo", "salesianos"):
+   - Sistema busca bot com essa propriedade no `config.csv`
+   - Mapeia `phone_number` → `bot_id` na sessão/cache
+   - Troca de bot para aquela sessão
+3. Mensagens subsequentes daquele `phone_number` são roteadas para o bot mapeado
+4. Se usuário digitar outro `whatsapp-id`, encerra sessão anterior e abre nova para o novo bot
 
-**Resultado**: Mensagens agora são exibidas corretamente no WhatsApp.
+### Arquivos a Modificar
 
-### 2025-03-08: Cache Semântico
+#### 1. `botserver/src/whatsapp/mod.rs`
+- **Linha ~178**: Modificar `verify_webhook` e `handle_webhook`
+  - Mudar `Path(bot_id): Path<Uuid>` → `Path(bot_id): Path<String>`
+  - Adicionar parsing: `"default"` → buscar UUID do bot default
+  - Manter parsing UUID para compatibilidade
 
-**Problema**: O cache semântico estava enviando todo o histórico de conversa (10000+ chars) para o embedding, causando falsos positivos.
+#### 2. `botserver/src/whatsapp/mod.rs`
+- **Nova função**: `resolve_bot_id(bot_id_str: &str, state: &AppState) -> Result<Uuid, Error>`
+  - Se `"default"` → retorna UUID do bot default via `get_default_bot()`
+  - Se UUID válido → retorna UUID
+  - Caso contrário → erro
 
-**Solução**: Modificado `botserver/src/llm/cache.rs` para extrair apenas a última pergunta do usuário do array de mensagens.
+#### 3. `botserver/src/whatsapp/mod.rs`
+- **Nova função**: `check_whatsapp_id_routing(message_text: &str, state: &AppState) -> Option<Uuid>`
+  - Verifica se texto é um comando de troca de bot
+  - Busca em todos os bots por `whatsapp-id` no `config.csv`
+  - Retorna bot_id se encontrar match
 
+#### 4. `botserver/src/whatsapp/mod.rs`
+- **Modificar** `process_incoming_message`
+  - Antes de processar, verificar se mensagem é comando de roteamento
+  - Se for, atualizar mapeamento `phone` → `bot_id` no cache
+  - Se não for, usar mapeamento existente do cache
+
+### Bots com whatsapp-id Configurado
+- ✅ **cristo.gbot**: `whatsapp-id,cristo`
+- ❓ **salesianos.gbot**: verificar se tem whatsapp-id
+- ✅ **default.gbot**: não tem whatsapp-id (é o roteador)
+
+### Implementação em Passos
+
+**Passo 1**: Modificar handlers para aceitar "default"
 ```rust
-// Antes (problemático):
-let combined_context = format!("{}\n{}", prompt, actual_messages);
+// Antes
+Path(bot_id): Path<Uuid>
 
-// Depois (corrigido):
-let latest_user_question = msgs.iter().rev()
-    .find_map(|msg| {
-        if msg.get("role") == Some("user") {
-            msg.get("content").and_then(|c| c.as_str())
-        } else { None }
-    });
+// Depois
+Path(bot_id_str): Path<String>
+let bot_id = resolve_bot_id(&bot_id_str, &state)?;
 ```
 
-**Resultado**: Embedding agora usa apenas ~52 chars (pergunta do usuário) em vez de 10000+ chars.
+**Passo 2**: Implementar `resolve_bot_id`
+- Buscar `get_default_bot()` quando `bot_id_str == "default"`
+- Parse UUID caso contrário
 
-### 2025-03-08: Correção de Streaming para Listas
+**Passo 3**: Implementar roteamento dinâmico
+- Verificar cache: `phone_number` → `bot_id`
+- Se não existir, usar bot_id do webhook
+- Se mensagem for comando (whatsapp-id), atualizar cache
 
-**Problema**: Listas numeradas estavam sendo quebradas em múltiplas mensagens durante o streaming, mesmo quando cabiam em uma única mensagem de 4000 caracteres.
+**Passo 4**: Testar
+```bash
+# Teste 1: URL com default
+curl -X POST "http://localhost:8080/webhook/whatsapp/default" ...
 
-**Causa**: A detecção de lista era feita APÓS decidir fazer flush baseado em 3 parágrafos. Quando o streaming enviava chunks parciais, o código não detectava que uma lista estava começando.
+# Teste 2: URL com UUID (deve continuar funcionando)
+curl -X POST "http://localhost:8080/webhook/whatsapp/32c579e5-609b-4a07-8599-4e0fccc4d764" ...
 
-**Solução**: Melhorada a lógica de detecção em `botserver/src/whatsapp/mod.rs`:
+# Teste 3: Roteamento por comando
+# Enviar mensagem "cristo" → deve rotear para bot cristo
+# Enviar mensagem "salesianos" → deve trocar para bot salesianos
+```
 
-1. **Detecção mais precisa de listas numeradas**: Agora requer padrão `N.` ou `N)` seguido de espaço (ex: "1. Item", "10) Item")
-2. **Detecção de início de lista**: Nova função `looks_like_list_start()` detecta quando o buffer parece estar começando uma lista (header terminando em `:` ou número no início)
-3. **Logs detalhados**: Adicionado logging para debug de streaming
-
-**Resultado**: Listas agora são acumuladas corretamente e enviadas em uma única mensagem quando possível.
-
-### 2025-03-08: Detecção de Fim de Lista no Streaming
-
-**Problema**: Listas estavam sendo enviadas como mensagens únicas apenas quando o streaming terminava (`is_final`), mesmo que a lista já tivesse terminado. Isso causava atrasos na entrega de mensagens quando havia conteúdo após a lista.
-
-**Causa**: Uma vez que uma lista era detectada (`has_list = true`), o código esperava até `is_final` ou `buffer.len() >= MAX_WHATSAPP_LENGTH` para fazer flush. Não havia detecção de quando a lista terminava.
-
-**Solução**: 
-- Adicionada função `looks_like_list_end()` em `botserver/src/whatsapp/mod.rs` que detecta quando uma lista terminou (verifica se as últimas 2 linhas não-brancas não são itens de lista)
-- Modificada a lógica de streaming para fazer flush quando `list_ended = true`
-- Adicionados testes unitários para validar o novo comportamento
-
-**Resultado**: Listas agora são enviadas assim que terminam, sem esperar o streaming completar. Conteúdo após a lista é entregue prontamente, melhorando a experiência do usuário.
-
-### 2025-03-08: Isolamento de Listas como Mensagens Únicas
-
-**Problema**: Listas estavam sendo enviadas misturadas com texto antes e depois, em vez de serem isoladas como mensagens únicas. Por exemplo, "Texto introdutório\n1. Item\n2. Item\nTexto final" era enviado como uma única mensagem, quando deveria ser 3 mensagens separadas.
-
-**Causa**: A lógica de streaming acumulava todo o buffer quando detectava uma lista, sem separar o texto antes/depois da lista. O buffer era enviado como um bloco único.
-
-**Solução**: Implementado isolamento de listas em `botserver/src/whatsapp/mod.rs`:
-- Adicionada função `split_text_before_list()` para separar texto antes da lista
-- Adicionada função `split_list_from_text()` para separar lista do texto depois
-- Modificada lógica de streaming para:
-  1. Detectar quando lista termina (`list_ended = true`)
-  2. Separar texto ANTES da lista e enviar como mensagem
-  3. Separar lista e enviar como mensagem ISOLADA
-  4. Manter texto DEPOIS no buffer para próxima mensagem
-
-**Resultado**: Listas agora são enviadas como mensagens ISOLADAS, sem misturar com texto antes ou depois. Cada lista = 1 mensagem separada, melhorando a legibilidade e experiência do usuário no WhatsApp.
-
-### 2025-03-08: Remoção de Blocos de Código JavaScript
-
-**Problema**: Código de programação (JavaScript, C#, etc.) estava vazando nas mensagens do WhatsApp. Exemplos como `var telefoneDigits = new string(args.Phone.Where(char.IsDigit).ToArray());` eram enviados para os usuários, quando deveriam ser removidos.
-
-**Causa**: A função `sanitize_for_whatsapp()` em `botserver/src/core/bot/channels/whatsapp.rs` removia Markdown e HTML, mas não removia blocos de código cercados por crases (backticks).
-
-**Solução**: Adicionados padrões regex à função `sanitize_for_whatsapp()`:
-- Remove blocos de código com crases triplas: ```code```
-- Remove código inline com crase simples: `code`
-- Limpa código de programação antes de enviar para WhatsApp
-
-**Resultado**: Mensagens do WhatsApp agora estão livres de código de programação, exibindo apenas texto legível para o usuário. Código JavaScript, C#, e outras linguagens são automaticamente removidos durante a sanitização.
+### URLs de Teste
+- Localtunnel: `https://bright-bananas-deny.loca.lt/webhook/whatsapp/default`
+- Local: `http://localhost:8080/webhook/whatsapp/default`
