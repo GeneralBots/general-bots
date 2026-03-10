@@ -1,0 +1,1 @@
+export NGROK_AUTHTOKEN=2f3uA0WXL3aDxjABuSWpYTWjjh5_2pqnDyrc7CU4o92UzocEt

@@ -1,0 +1,8 @@
+data: {"candidates": [{"content": {"role": "model","parts": [{"text": "Hello!"}]}}],"usageMetadata": {"trafficType": "ON_DEMAND"},"modelVersion": "gemini-3.1-flash-lite-preview","createTime": "2026-03-10T14:54:45.066123Z","responseId": "tTCwacuEBMvnitYP06qsgQY"}
+
+data: {"candidates": [{"content": {"role": "model","parts": [{"text": " How can I help you today"}]}}],"usageMetadata": {"trafficType": "ON_DEMAND"},"modelVersion": "gemini-3.1-flash-lite-preview","createTime": "2026-03-10T14:54:45.066123Z","responseId": "tTCwacuEBMvnitYP06qsgQY"}
+
+data: {"candidates": [{"content": {"role": "model","parts": [{"text": "?"}]}}],"usageMetadata": {"trafficType": "ON_DEMAND"},"modelVersion": "gemini-3.1-flash-lite-preview","createTime": "2026-03-10T14:54:45.066123Z","responseId": "tTCwacuEBMvnitYP06qsgQY"}
+
+data: {"candidates": [{"content": {"role": "model","parts": [{"text": "","thoughtSignature": "AY89a18iOcFus5wr5bW5xN6zZ4aUiCyhgmg6HE2YjtYDV/dwZ5oZlZHeTmiUKv34qq0="}]},"finishReason": "STOP"}],"usageMetadata": {"promptTokenCount": 1,"candidatesTokenCount": 9,"totalTokenCount": 10,"trafficType": "ON_DEMAND","promptTokensDetails": [{"modality": "TEXT","tokenCount": 1}],"candidatesTokensDetails": [{"modality": "TEXT","tokenCount": 9}]},"modelVersion": "gemini-3.1-flash-lite-preview","createTime": "2026-03-10T14:54:45.066123Z","responseId": "tTCwacuEBMvnitYP06qsgQY"}
+
