@@ -28,6 +28,27 @@ See botserver/src/drive/local_file_monitor.rs to see how to load from /opt/gbo/d
 
 ---
 
+## 📁 WORKSPACE STRUCTURE
+
+| Crate | Purpose | Port | Tech Stack |
+|-------|---------|------|------------|
+| **botserver** | Main API server, business logic | 8080 | Axum, Diesel, Rhai BASIC |
+| **botui** | Web UI server (dev) + proxy | 3000 | Axum, HTML/HTMX/CSS |
+| **botapp** | Desktop app wrapper | - | Tauri 2 |
+| **botlib** | Shared library | - | Core types, errors |
+| **botbook** | Documentation | - | mdBook |
+| **bottest** | Integration tests | - | tokio-test |
+| **botdevice** | IoT/Device support | - | Rust |
+| **botplugin** | Browser extension | - | JS |
+
+### Key Paths
+- **Binary:** `target/debug/botserver`
+- **Run from:** `botserver/` directory
+- **Env file:** `botserver/.env`
+- **UI Files:** `botui/ui/suite/`
+
+---
+
 ## 🧭 LLM Navigation Guide
 
 ### Reading This Workspace
@@ -298,6 +319,17 @@ END LOOP
 
 ---
 
+## 🧠 Memory Management
+
+When compilation fails due to memory issues (process "Killed"):
+
+```bash
+pkill -9 cargo; pkill -9 rustc; pkill -9 botserver
+CARGO_BUILD_JOBS=1 cargo check -p botserver 2>&1 | tail -200
+```
+
+---
+
 ## 🎭 Playwright Browser Testing - YOLO Mode
 
 **When user requests to start YOLO mode with Playwright:**
@@ -308,6 +340,11 @@ END LOOP
 4. **Verify results** - Check for expected content, errors in console, network requests
 5. **Validate backend** - Check database and services to confirm process completion
 6. **Report findings** - Always include screenshot evidence with `browser_take_screenshot`
+
+**⚠️ IMPORTANT - Desktop UI Navigation:**
+- The desktop may have a maximized chat window covering other apps
+- To access CRM/sidebar icons, click the **middle button** (restore/down arrow) in the chat window header to minimize it
+- Or navigate directly via URL: http://localhost:3000/suite/crm (after login)
 
 **Bot-Specific Testing URL Pattern:**
 `http://localhost:3000/<botname>`
@@ -410,6 +447,42 @@ When ANY error appears in logs during startup or operation:
 ### Linting & Code Quality
 - **Clippy**: Code MUST pass `cargo clippy --workspace` with **0 warnings**.
 - **No Allow**: NEVER use `#[allow(clippy::...)]` in source code - FIX the code instead.
+
+---
+
+## 🔧 Technical Debt
+
+### Critical Issues to Address
+- Error handling debt: instances of `unwrap()`/`expect()` in production code
+- Performance debt: excessive `clone()`/`to_string()` calls
+- File size debt: files exceeding 450 lines
+
+### Weekly Maintenance Tasks
+```bash
+cargo tree --duplicates   # Find duplicate dependencies
+cargo machete            # Remove unused dependencies
+cargo build --release && ls -lh target/release/botserver  # Check binary size
+cargo audit              # Security audit
+```
+
+---
+
+## 📋 Continuation Prompt
+
+When starting a new session or continuing work:
+
+```
+Continue on gb/ workspace. Follow AGENTS.md strictly:
+
+1. Check current state with build/diagnostics
+2. Fix ALL warnings and errors - NO #[allow()] attributes
+3. Delete unused code, don't suppress warnings
+4. Remove unused parameters, don't prefix with _
+5. Replace ALL unwrap()/expect() with proper error handling
+6. Verify after each fix batch
+7. Loop until 0 warnings, 0 errors
+8. Refactor files >450 lines
+```
 
 ---
 
