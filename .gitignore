@@ -60,3 +60,17 @@ init.json
 *.key
 *.crt
 *.cert
+$null
+AppData/
+build_errors.txt
+build_errors2.txt
+build_errors2_utf8.txt
+build_errors3.txt
+build_errors_utf8.txt
+check.json
+clippy.txt
+clippy2.txt
+clippy_output.txt
+clippy_warnings.txt
+errors.txt
+errors_utf8.txt
