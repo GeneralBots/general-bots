@@ -358,6 +358,202 @@ After UI interactions, validate backend state via `psql` or `tail` logs.
 
 ---
 
+## ➕ Adding New Features Workflow
+
+### Step 1: Plan the Feature
+
+**Understand requirements:**
+1. What problem does this solve?
+2. Which module owns this functionality? (Check [Module Responsibility Matrix](../README.md#-module-responsibility-matrix))
+3. What data structures are needed?
+4. What are the security implications?
+
+**Design checklist:**
+- [ ] Does it fit existing architecture patterns?
+- [ ] Will it require database migrations?
+- [ ] Does it need new API endpoints?
+- [ ] Will it affect existing features?
+- [ ] What are the error cases?
+
+### Step 2: Implement the Feature
+
+**Follow the pattern:**
+```rust
+// 1. Add types to botlib if shared across crates
+// botlib/src/models.rs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewFeature {
+    pub id: Uuid,
+    pub name: String,
+}
+
+// 2. Add database schema if needed
+// botserver/migrations/YYYY-MM-DD-HHMMSS_feature_name/up.sql
+CREATE TABLE new_features (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+// 3. Add Diesel model
+// botserver/src/core/shared/models/core.rs
+#[derive(Queryable, Insertable)]
+#[diesel(table_name = new_features)]
+pub struct NewFeatureDb {
+    pub id: Uuid,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+// 4. Add business logic
+// botserver/src/features/new_feature.rs
+pub async fn create_feature(
+    state: &AppState,
+    name: String,
+) -> Result<NewFeature, Error> {
+    // Implementation
+}
+
+// 5. Add API endpoint
+// botserver/src/api/routes.rs
+async fn create_feature_handler(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<CreateFeatureRequest>,
+) -> Result<Json<NewFeature>, (StatusCode, String)> {
+    // Handler implementation
+}
+```
+
+**Security checklist:**
+- [ ] Input validation (use `sanitize_identifier` for SQL)
+- [ ] Authentication required?
+- [ ] Authorization checks?
+- [ ] Rate limiting needed?
+- [ ] Error messages sanitized? (use `log_and_sanitize`)
+- [ ] No `unwrap()` or `expect()` in production code
+
+### Step 3: Add BASIC Keywords (if applicable)
+
+**For features accessible from .bas scripts:**
+```rust
+// botserver/src/basic/keywords/new_feature.rs
+pub fn new_feature_keyword(
+    state: Arc<AppState>,
+    user_session: UserSession,
+    engine: &mut Engine,
+) {
+    let state_clone = state.clone();
+    let session_clone = user_session.clone();
+
+    engine
+        .register_custom_syntax(
+            ["NEW_FEATURE", "$expr$"],
+            true,
+            move |context, inputs| {
+                let param = context.eval_expression_tree(&inputs[0])?.to_string();
+                
+                // Call async function from sync context
+                let result = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(async {
+                        create_feature(&state_clone, param).await
+                    })
+                });
+                
+                match result {
+                    Ok(feature) => Ok(Dynamic::from(feature.name)),
+                    Err(e) => Err(format!("Failed: {}", e).into()),
+                }
+            },
+        )
+        .expect("valid syntax registration");
+}
+
+// Register in botserver/src/basic/keywords/mod.rs
+pub mod new_feature;
+pub use new_feature::new_feature_keyword;
+```
+
+### Step 4: Test the Feature
+
+**Local testing:**
+```bash
+# 1. Run migrations
+diesel migration run
+
+# 2. Build and restart
+./restart.sh
+
+# 3. Test via API
+curl -X POST http://localhost:9000/api/features \
+  -H "Content-Type: application/json" \
+  -d '{"name": "test"}'
+
+# 4. Test via BASIC script
+# Create test.bas in /opt/gbo/data/testbot.gbai/testbot.gbdialog/
+# NEW_FEATURE "test"
+
+# 5. Check logs
+tail -f botserver.log | grep -i "new_feature"
+```
+
+**Integration test:**
+```rust
+// bottest/tests/new_feature_test.rs
+#[tokio::test]
+async fn test_create_feature() {
+    let state = setup_test_state().await;
+    let result = create_feature(&state, "test".to_string()).await;
+    assert!(result.is_ok());
+}
+```
+
+### Step 5: Document the Feature
+
+**Update documentation:**
+- Add to `botbook/src/features/` if user-facing
+- Add to module README.md if developer-facing
+- Add inline code comments for complex logic
+- Update API documentation
+
+**Example documentation:**
+```markdown
+## NEW_FEATURE Keyword
+
+Creates a new feature with the given name.
+
+**Syntax:**
+```basic
+NEW_FEATURE "feature_name"
+```
+
+**Example:**
+```basic
+NEW_FEATURE "My Feature"
+TALK "Feature created!"
+```
+
+**Returns:** Feature name as string
+```
+
+### Step 6: Commit & Deploy
+
+**Commit pattern:**
+```bash
+git add .
+git commit -m "feat: Add NEW_FEATURE keyword
+
+- Adds new_features table with migrations
+- Implements create_feature business logic
+- Adds NEW_FEATURE BASIC keyword
+- Includes API endpoint at POST /api/features
+- Tests: Unit tests for business logic, integration test for API"
+
+git push alm main
+git push origin main
+```
+
+---
+
 ## 🧪 Testing Strategy
 
 ### Unit Tests
@@ -417,6 +613,160 @@ When ANY error appears in logs during startup or operation:
 | **botui** | `botui.log` | UI rendering, WebSocket connections |
 | **drive_monitor** | In botserver logs with `[drive_monitor]` prefix | File sync, compilation |
 | **client errors** | In botserver logs with `CLIENT:` prefix | JavaScript errors, navigation events |
+
+---
+
+## 🔧 Bug Fixing Workflow
+
+### Step 1: Reproduce & Diagnose
+
+**Identify the symptom:**
+```bash
+# Check recent errors
+grep -E " E | W " botserver.log | tail -20
+
+# Check specific component
+grep "component_name" botserver.log | tail -50
+
+# Monitor live
+tail -f botserver.log | grep -E "ERROR|WARN"
+```
+
+**Trace the data flow:**
+1. Find where the bug manifests (UI, API, database, cache)
+2. Work backwards through the call chain
+3. Check logs at each layer
+
+**Example: "Suggestions not showing"**
+```bash
+# 1. Check if frontend is requesting suggestions
+grep "GET /api/suggestions" botserver.log | tail -5
+
+# 2. Check if suggestions exist in cache
+/opt/gbo/bin/botserver-stack/bin/cache/bin/valkey-cli --scan --pattern "suggestions:*"
+
+# 3. Check if suggestions are being generated
+grep "ADD_SUGGESTION" botserver.log | tail -10
+
+# 4. Verify the Redis key format
+grep "Adding suggestion to Redis key" botserver.log | tail -5
+```
+
+### Step 2: Find the Code
+
+**Use code search tools:**
+```bash
+# Find function/keyword implementation
+cd botserver/src && grep -r "ADD_SUGGESTION_TOOL" --include="*.rs"
+
+# Find where Redis keys are constructed
+grep -r "suggestions:" --include="*.rs" | grep format
+
+# Find struct definition
+grep -r "pub struct UserSession" --include="*.rs"
+```
+
+**Check module responsibility:**
+- Refer to [Module Responsibility Matrix](../README.md#-module-responsibility-matrix)
+- Check `mod.rs` files for module structure
+- Look for related functions in same file
+
+### Step 3: Fix the Bug
+
+**Identify root cause:**
+- Wrong variable used? (e.g., `user_id` instead of `bot_id`)
+- Missing validation?
+- Race condition?
+- Configuration issue?
+
+**Make minimal changes:**
+```rust
+// ❌ BAD: Rewrite entire function
+fn add_suggestion(...) {
+    // 100 lines of new code
+}
+
+// ✅ GOOD: Fix only the bug
+fn add_suggestion(...) {
+    // Change line 318:
+    - let key = format!("suggestions:{}:{}", user_session.user_id, session_id);
+    + let key = format!("suggestions:{}:{}", user_session.bot_id, session_id);
+}
+```
+
+**Search for similar bugs:**
+```bash
+# If you fixed user_id -> bot_id in one place, check all occurrences
+grep -n "user_session.user_id" botserver/src/basic/keywords/add_suggestion.rs
+```
+
+### Step 4: Test Locally
+
+**Verify the fix:**
+```bash
+# 1. Build
+cargo check -p botserver
+
+# 2. Restart
+./restart.sh
+
+# 3. Test the specific feature
+# - Open browser to http://localhost:3000/<botname>
+# - Trigger the bug scenario
+# - Verify it's fixed
+
+# 4. Check logs for errors
+tail -20 botserver.log | grep -E "ERROR|WARN"
+```
+
+### Step 5: Commit & Deploy
+
+**Commit with clear message:**
+```bash
+cd botserver
+git add src/path/to/file.rs
+git commit -m "Fix: Use bot_id instead of user_id in suggestion keys
+
+- Root cause: Wrong field used in Redis key format
+- Impact: Suggestions stored under wrong key, frontend couldn't retrieve
+- Files: src/basic/keywords/add_suggestion.rs (5 occurrences)
+- Testing: Verified suggestions now appear in UI"
+```
+
+**Push to remotes:**
+```bash
+# Push submodule
+git push alm main
+git push origin main
+
+# Update root repository
+cd ..
+git add botserver
+git commit -m "Update botserver: Fix suggestion key bug"
+git push alm main
+git push origin main
+```
+
+**Production deployment:**
+- ALM push triggers CI/CD pipeline
+- Wait ~10 minutes for build + deploy
+- Service auto-restarts on binary update
+- Test in production after deployment
+
+### Step 6: Document
+
+**Add to AGENTS-PROD.md if production-relevant:**
+- Common symptom
+- Diagnosis commands
+- Fix procedure
+- Prevention tips
+
+**Update code comments if needed:**
+```rust
+// Redis key format: suggestions:bot_id:session_id
+// Note: Must use bot_id (not user_id) to match frontend queries
+let key = format!("suggestions:{}:{}", user_session.bot_id, session_id);
+```
 
 ---
 
