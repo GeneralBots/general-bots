@@ -1,19 +1,5 @@
 # General Bots Cloud — Production Operations Guide
 
-## Act like this - Be the operator
-
-> follow AGENTS-PROD.md login to prod and test why  not startup botserver in pragmatismo-system user@server.com
-
-> Let me first check the AGENTS-PROD.md file for production access instructions.
-Reading file: AGENTS-PROD.md, all lines (using tool: read)
- ✓ Successfully read 6061 bytes from AGENTS-PROD.md
- - Completed in 0.0s
-
-> Now let me SSH into the production server and check the pragmatismo-system container.
-I will run the following command: ssh -o StrictHostKeyChecking=no user@server "lxc exec pragmatismo-system -- systemctl status system.service --no-pager -l" 2>&1 (using tool: shell)
-Purpose: Check botserver service status in pragmatismo-system
-
-
 ## Infrastructure Overview
 - **Host OS:** Ubuntu 24.04 LTS, LXD (snap)
 - **SSH:** Key auth only, sudoer user in `lxd` group
@@ -89,7 +75,7 @@ lxc exec <tenant>-system -- /opt/gbo/bin/botserver-stack/bin/cache/bin/valkey-cl
 lxc exec <tenant>-system -- grep "Adding suggestion to Redis key" /opt/gbo/logs/error.log | tail -5
 ```
 
-**Fix:** This was a code bug (fixed in commit ec4fcc09) where suggestions were stored with `user_id` instead of `bot_id`. After deploying the fix:
+**Fix:** This was a code bug where suggestions were stored with `user_id` instead of `bot_id`. After deploying the fix:
 1. Wait for CI/CD to build and deploy new binary (~10 minutes)
 2. Service auto-restarts on binary update
 3. Test by opening a new session (old sessions may have stale keys)
@@ -146,7 +132,7 @@ The full config has ~25 vhosts. If you only see 1-2 vhosts, you are looking at a
 - botui: `ui.service` on port 5859
 - `BOTSERVER_URL` in `ui.service` must point to **`http://localhost:5858`** (not HTTPS external URL) — using external URL causes WebSocket disconnect before TALK executes
 - Valkey/Redis bound to `127.0.0.1:6379` — iptables rules must allow loopback on this port or suggestions/cache won't work
-- Vault unseal keys stored in `/opt/gbo/bin/botserver-stack/conf/vault/init.json`
+- Vault unseal keys stored in `/opt/gbo/bin/botserver-stack/conf/vault/init.json` (production only - never commit to git)
 
 ### iptables loopback rule (required)
 Internal services (Valkey, MinIO) are protected by DROP rules. Loopback must be explicitly allowed **before** the DROP rules:
@@ -246,9 +232,9 @@ lxc exec <tenant>-system -- iptables -L -n | grep -E 'DROP|ACCEPT.*lo'
 # ZFS snapshot usage
 zfs list -t snapshot -o name,used | sort -k2 -rh | head -20
 
-# Unseal Vault
+# Unseal Vault (use actual unseal key from init.json)
 lxc exec <tenant>-system -- bash -c "
   export VAULT_ADDR=https://127.0.0.1:8200 VAULT_SKIP_VERIFY=true
-  /opt/gbo/bin/botserver-stack/bin/vault/vault operator unseal <key>
+  /opt/gbo/bin/botserver-stack/bin/vault/vault operator unseal \$UNSEAL_KEY
 "
 ```
