@@ -1,5 +1,19 @@
 # General Bots Cloud — Production Operations Guide
 
+## Act like this - Be the operator
+
+> follow AGENTS-PROD.md login to prod and test why  not startup botserver in pragmatismo-system user@server.com
+
+> Let me first check the AGENTS-PROD.md file for production access instructions.
+Reading file: AGENTS-PROD.md, all lines (using tool: read)
+ ✓ Successfully read 6061 bytes from AGENTS-PROD.md
+ - Completed in 0.0s
+
+> Now let me SSH into the production server and check the pragmatismo-system container.
+I will run the following command: ssh -o StrictHostKeyChecking=no user@server "lxc exec pragmatismo-system -- systemctl status system.service --no-pager -l" 2>&1 (using tool: shell)
+Purpose: Check botserver service status in pragmatismo-system
+
+
 ## Infrastructure Overview
 - **Host OS:** Ubuntu 24.04 LTS, LXD (snap)
 - **SSH:** Key auth only, sudoer user in `lxd` group
@@ -30,6 +44,74 @@
 - **ufw** with `DEFAULT_FORWARD_POLICY=ACCEPT` (needed for container internet)
 - LXD forward rule must persist via systemd service
 - **fail2ban** on host (SSH jail) and in email container (mail jail)
+
+---
+
+## 🔧 Common Production Issues & Fixes
+
+### Issue: Valkey/Redis Connection Timeout
+
+**Symptom:** botserver logs show `Connection timed out (os error 110)` when connecting to cache at `localhost:6379`
+
+**Root Cause:** iptables DROP rule for port 6379 blocks loopback traffic because no ACCEPT rule for `lo` interface exists before the DROP rules.
+
+**Fix:**
+```bash
+# Insert loopback ACCEPT at top of INPUT chain
+lxc exec <tenant>-system -- iptables -I INPUT 1 -i lo -j ACCEPT
+
+# Persist the rule
+lxc exec <tenant>-system -- bash -c 'iptables-save > /etc/iptables/rules.v4'
+
+# Verify Valkey responds
+lxc exec <tenant>-system -- /opt/gbo/bin/botserver-stack/bin/cache/bin/valkey-cli ping
+# Should return: PONG
+
+# Restart botserver to pick up working cache
+lxc exec <tenant>-system -- systemctl restart system.service ui.service
+```
+
+**Prevention:** Always ensure loopback ACCEPT rule is at the top of iptables INPUT chain before any DROP rules.
+
+### Issue: Suggestions Not Showing in Frontend
+
+**Symptom:** Bot's start.bas has `ADD_SUGGESTION_TOOL` calls but suggestions don't appear in the UI.
+
+**Diagnosis:**
+```bash
+# Get bot ID
+lxc exec <tenant>-system -- /opt/gbo/bin/botserver-stack/bin/tables/bin/psql -h localhost -U gbuser -d botserver -t -c "SELECT id, name FROM bots WHERE name = 'botname';"
+
+# Check if suggestions exist in cache with correct bot_id
+lxc exec <tenant>-system -- /opt/gbo/bin/botserver-stack/bin/cache/bin/valkey-cli --scan --pattern "suggestions:<bot_id>:*"
+
+# If no keys found, check logs for wrong bot_id being used
+lxc exec <tenant>-system -- grep "Adding suggestion to Redis key" /opt/gbo/logs/error.log | tail -5
+```
+
+**Fix:** This was a code bug (fixed in commit ec4fcc09) where suggestions were stored with `user_id` instead of `bot_id`. After deploying the fix:
+1. Wait for CI/CD to build and deploy new binary (~10 minutes)
+2. Service auto-restarts on binary update
+3. Test by opening a new session (old sessions may have stale keys)
+
+**Deployment Workflow:**
+```bash
+# 1. Fix code in dev environment
+# 2. Commit and push to ALM
+cd botserver && git push alm main
+
+# 3. Update root gb repository
+cd .. && git add botserver && git commit -m "Update submodule" && git push alm main
+
+# 4. Wait 10 minutes for CI/CD pipeline
+# 5. Verify deployment
+lxc exec <tenant>-system -- ls -lh /opt/gbo/bin/botserver
+lxc exec <tenant>-system -- systemctl status system.service
+
+# 6. Test the fix
+# Open new session at https://chat.<domain>/<botname>
+# Suggestions should now appear
+```
 
 ---
 
