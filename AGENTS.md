@@ -317,6 +317,10 @@ LOOP UNTIL (0 warnings AND 0 errors):
 END LOOP
 ```
 
+### ⚡ Streaming Build Rule
+
+**Do NOT wait for `cargo` to finish.** As soon as the first errors appear in output, cancel/interrupt the build, fix those errors immediately, then re-run. This avoids wasting time on a full compile when errors are already visible.
+
 ---
 
 ## 🧠 Memory Management

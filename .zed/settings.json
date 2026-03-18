@@ -1,7 +1,0 @@
-{
-  "languages": {
-    "Rust": {
-      "enable_language_server": false,
-    },
-  },
-}
