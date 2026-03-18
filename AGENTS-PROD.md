@@ -124,12 +124,6 @@ Proxy container needs its own fail2ban for HTTP flood protection:
 
 ---
 
-## Bot Compiler — Known Issues Fixed
-
-**Tools without PARAM declarations** (e.g. `USE KB` only tools) were not getting `.mcp.json` generated, causing `USE TOOL` to silently skip them. Fixed in compiler: always generate `.mcp.json` even for parameterless tools.
-
----
-
 ## Git Workflow
 
 Push to both remotes after every change:
