@@ -238,3 +238,59 @@ lxc exec <tenant>-system -- bash -c "
   /opt/gbo/bin/botserver-stack/bin/vault/vault operator unseal \$UNSEAL_KEY
 "
 ```
+
+---
+
+## CI/CD Debugging
+
+### Check CI Runner Container
+```bash
+# From production host, SSH to CI runner
+ssh root@<tenant>-alm-ci
+
+# Check CI workspace for cloned repos
+ls /root/workspace/
+
+# Test SSH to system container
+ssh -o ConnectTimeout=5 pragmatismo-system 'hostname'
+```
+
+### Query CI Runs via Forgejo API
+```bash
+# List recent workflow runs for a repo
+curl -s "http://alm.pragmatismo.com.br/api/v1/repos/GeneralBots/<repo>/actions/runs?limit=5"
+
+# Trigger workflow manually (if token available)
+curl -X POST "http://alm.pragmatismo.com.br/api/v1/repos/GeneralBots/<repo>/actions/workflows/<workflow>.yaml/runs"
+```
+
+### Check Binary Deployed
+```bash
+# From production host
+lxc exec <tenant>-system -- stat /opt/gbo/bin/<binary> | grep Modify
+lxc exec <tenant>-system -- strings /opt/gbo/bin/<binary> | grep '<expected_code_string>'
+```
+
+### CI Build Logs Location
+```bash
+# On CI runner (pragmatismo-alm-ci)
+# Logs saved via: sudo cp /tmp/build.log /opt/gbo/logs/
+
+# Access from production host
+ssh root@<tenant>-alm-ci -- cat /opt/gbo/logs/*.log 2>/dev/null
+```
+
+### Common CI Issues
+
+**SSH Connection Refused:**
+- CI runner must have `pragmatismo-system` in `/root/.ssh/config` with IP `10.16.164.33`
+- Check: `ssh -o ConnectTimeout=5 pragmatismo-system 'hostname'`
+
+**Binary Not Updated After Deploy:**
+- Verify binary modification time matches CI run time
+- Check CI build source: Clone on CI runner and verify code
+- Ensure `embed-ui` feature includes the file (RustEmbed embeds at compile time)
+```bash
+# Rebuild with correct features
+cargo build --release -p botui --features embed-ui
+```
