@@ -245,10 +245,9 @@ match x {
 - NEVER search /target folder! It is binary compiled.
 - ❌ **NEVER** build in release mode - ONLY debug builds allowed
 - ❌ **NEVER** use `--release` flag on ANY cargo command
-- ❌ **NEVER** use `--all-targets` with clippy - too slow (1m 44s without vs 10min+ with)
-- ❌ **NEVER** use `--all-features` unless testing specific feature gates
-- ❌ **ALWAYS** use: `cargo clippy --workspace` (DEBUG mode, lib + bin only)
 - ❌ **NEVER** run `cargo build` - use `cargo check` for syntax verification
+- ❌ **NEVER** compile directly for production - ALWAYS use push + CI/CD pipeline
+- ❌ **NEVER** use `scp` or manual transfer to deploy - ONLY CI/CD ensures correct deployment
 
 **Current Status:** ✅ **0 clippy warnings** (down from 61 - PERFECT SCORE in YOLO mode)
 - ❌ **NEVER** use `panic!()`, `todo!()`, `unimplemented!()`
