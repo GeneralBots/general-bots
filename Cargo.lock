@@ -1275,7 +1275,7 @@ dependencies = [
 
 [[package]]
 name = "botapp"
-version = "6.1.0"
+version = "6.3.0"
 dependencies = [
  "anyhow",
  "botlib",
@@ -1296,7 +1296,7 @@ dependencies = [
 
 [[package]]
 name = "botdevice"
-version = "6.1.0"
+version = "6.3.0"
 dependencies = [
  "android_logger",
  "env_logger",
@@ -1314,7 +1314,7 @@ dependencies = [
 
 [[package]]
 name = "botlib"
-version = "6.1.0"
+version = "6.3.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1332,7 +1332,7 @@ dependencies = [
 
 [[package]]
 name = "botserver"
-version = "6.2.0"
+version = "6.3.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -1425,7 +1425,7 @@ dependencies = [
 
 [[package]]
 name = "bottest"
-version = "6.1.0"
+version = "6.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1454,7 +1454,7 @@ dependencies = [
 
 [[package]]
 name = "botui"
-version = "6.1.2"
+version = "6.3.0"
 dependencies = [
  "anyhow",
  "axum",

@@ -21,7 +21,7 @@ Secret files MUST be placed in `/tmp/` only:
 ---
 
 
-**Version:** 6.2.0  
+**Version:** 6.3.0  
 **Type:** Rust Workspace (Monorepo with Independent Subproject Repos)
 
 ---
