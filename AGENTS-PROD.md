@@ -181,6 +181,31 @@ Proxy container needs its own fail2ban for HTTP flood protection:
 - sccache + cargo registry cache accumulates — daily cleanup cron required
 - ZFS snapshots of CI container can be huge if taken while cross-mounts were active — delete stale snapshots after removing mounts
 
+### Forgejo Workflow Location
+Each submodule has its own workflow at `.forgejo/workflows/<name>.yaml`.
+
+**botserver workflow:** `botserver/.forgejo/workflows/botserver.yaml`
+
+### Deploy Step — CRITICAL
+The deploy step must **kill the running botserver process before `scp`**, otherwise `scp` fails with `dest open: Failure` (binary is locked by running process):
+
+```yaml
+- name: Deploy via SSH
+  run: |
+    ssh pragmatismo-system "pkill -f /opt/gbo/bin/botserver || true; sleep 2"
+    scp target/debug/botserver pragmatismo-system:/opt/gbo/bin/botserver
+    ssh pragmatismo-system "chmod +x /opt/gbo/bin/botserver && cd /opt/gbo/bin && nohup sudo -u gbuser ./botserver --noconsole >> /opt/gbo/logs/error.log 2>&1 &"
+```
+
+**Never use `systemctl stop system.service`** — botserver is not managed by systemd, it runs as a process under `gbuser`.
+
+### Binary Ownership
+The binary at `/opt/gbo/bin/botserver` must be owned by `gbuser`, not `root`:
+```bash
+lxc exec pragmatismo-system -- chown gbuser:gbuser /opt/gbo/bin/botserver
+```
+If owned by root, `scp` as `gbuser` will fail even after killing the process.
+
 ---
 
 ## ZFS Disk Space
