@@ -80,23 +80,34 @@ lxc exec <tenant>-system -- grep "Adding suggestion to Redis key" /opt/gbo/logs/
 2. Service auto-restarts on binary update
 3. Test by opening a new session (old sessions may have stale keys)
 
-**Deployment Workflow:**
+### Deployment & Testing Workflow
+
 ```bash
 # 1. Fix code in dev environment
-# 2. Commit and push to ALM
+# 2. Push to ALM (both submodules AND root)
 cd botserver && git push alm main
-
-# 3. Update root gb repository
 cd .. && git add botserver && git commit -m "Update submodule" && git push alm main
 
-# 4. Wait 10 minutes for CI/CD pipeline
-# 5. Verify deployment
-lxc exec <tenant>-system -- ls -lh /opt/gbo/bin/botserver
-lxc exec <tenant>-system -- systemctl status system.service
+# 3. Wait ~4 minutes for CI/CD build
+# Build time: ~3-4 minutes on CI runner
 
-# 6. Test the fix
-# Open new session at https://chat.<domain>/<botname>
-# Suggestions should now appear
+# 4. Verify deployment
+ssh root@pragmatismo.com.br "lxc exec pragmatismo-system -- stat /opt/gbo/bin/botserver | grep Modify"
+
+# 5. Test with Playwright
+# Use Playwright MCP to open https://chat.pragmatismo.com.br/<botname>
+# Verify suggestions appear, TALK executes, no errors in console
+```
+
+**Testing with Playwright:**
+```bash
+# Open bot in browser via Playwright MCP
+Navigate to: https://chat.pragmatismo.com.br/<botname>
+
+# Verify:
+# - start.bas executes quickly (< 5 seconds)
+# - Suggestions appear in UI
+# - No errors in browser console
 ```
 
 ---
@@ -128,11 +139,50 @@ The full config has ~25 vhosts. If you only see 1-2 vhosts, you are looking at a
 
 ## botserver / botui
 
-- botserver: `system.service` on port 5858
-- botui: `ui.service` on port 5859
+- botserver: `/opt/gbo/bin/botserver` (system.service, port 5858)
+- botui: `/opt/gbo/bin/botui` (ui.service, port 5859)
 - `BOTSERVER_URL` in `ui.service` must point to **`http://localhost:5858`** (not HTTPS external URL) — using external URL causes WebSocket disconnect before TALK executes
 - Valkey/Redis bound to `127.0.0.1:6379` — iptables rules must allow loopback on this port or suggestions/cache won't work
-- Vault unseal keys stored in `/opt/gbo/bin/botserver-stack/conf/vault/init.json` (production only - never commit to git)
+- Vault unseal keys stored in `/opt/gbo/vault-unseal-keys` (production only - never commit to git)
+
+### Caddy in Proxy Container
+- Binary: `/usr/bin/caddy` (system container) or `caddy` in PATH
+- Config: `/opt/gbo/conf/config`
+- Reload: `lxc exec <tenant>-proxy -- caddy reload --config /opt/gbo/conf/config --adapter caddyfile`
+- Storage: `/opt/gbo/data/caddy`
+
+### Log Locations
+
+**botserver/botui logs:**
+```bash
+# Main application logs (in pragmatismo-system container)
+/opt/gbo/logs/error.log          # botserver logs
+/opt/gbo/logs/botui-error.log   # botui logs
+/opt/gbo/logs/output.log         # stdout/stderr output
+```
+
+**Component logs (in `/opt/gbo/bin/botserver-stack/logs/`):**
+```bash
+cache/         # Valkey/Redis logs
+directory/     # Zitadel logs  
+drive/         # MinIO S3 logs
+llm/           # LLM (llama.cpp) logs
+tables/        # PostgreSQL logs
+vault/         # Vault secrets logs
+vector_db/     # Qdrant vector DB logs
+```
+
+**Checking component logs:**
+```bash
+# Valkey
+lxc exec pragmatismo-system -- tail -f /opt/gbo/bin/botserver-stack/logs/cache/valkey.log
+
+# PostgreSQL
+lxc exec pragmatismo-system -- tail -f /opt/gbo/bin/botserver-stack/logs/tables/postgres.log
+
+# Qdrant
+lxc exec pragmatismo-system -- tail -f /opt/gbo/bin/botserver-stack/logs/vector_db/qdrant.log
+```
 
 ### iptables loopback rule (required)
 Internal services (Valkey, MinIO) are protected by DROP rules. Loopback must be explicitly allowed **before** the DROP rules:
