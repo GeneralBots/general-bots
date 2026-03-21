@@ -74,4 +74,5 @@ clippy*.txt
 errors.txt
 errors_utf8.txt
 
-vault-unseal-keys
+vault-unseal-keysdefault-vault.tar
+prompts/sec-bots.md
