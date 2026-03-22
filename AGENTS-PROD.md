@@ -225,8 +225,9 @@ Proxy container needs its own fail2ban for HTTP flood protection:
 
 ## CI/CD (Forgejo Runner)
 
+- **ALWAYS use CI for deployment** — NEVER manually scp binaries. CI ensures consistent, auditable deployments.
 - Runner container must have **no cross-container disk mounts**
-- Deploy via SSH: `scp binary <system-container>:/opt/gbo/bin/botserver`
+- Deploy via SSH: `scp binary <system-container>:/opt/gbo/bin/botserver` (only from CI, not manually)
 - SSH key from runner → system container must be pre-authorized
 - sccache + cargo registry cache accumulates — daily cleanup cron required
 - ZFS snapshots of CI container can be huge if taken while cross-mounts were active — delete stale snapshots after removing mounts
@@ -235,6 +236,28 @@ Proxy container needs its own fail2ban for HTTP flood protection:
 Each submodule has its own workflow at `.forgejo/workflows/<name>.yaml`.
 
 **botserver workflow:** `botserver/.forgejo/workflows/botserver.yaml`
+
+### CI Deployment Flow
+1. Push code to ALM → triggers CI workflow automatically
+2. CI builds binary on `pragmatismo-alm-ci` runner
+3. CI deploys to `pragmatismo-system` container via SSH
+4. CI verifies botserver process is running after deploy
+5. If CI fails → check logs at `/tmp/deploy-*.log` on CI runner
+
+**To trigger CI manually:**
+```bash
+# Push to ALM
+cd botserver && git push alm main
+
+# Or via API
+curl -X POST "http://alm.pragmatismo.com.br/api/v1/repos/GeneralBots/BotServer/actions/workflows/botserver.yaml/runs"
+```
+
+### SSH Hostname Setup (CI Runner)
+The CI runner must resolve `pragmatismo-system` hostname. Add to `/etc/hosts` if missing:
+```bash
+lxc exec pragmatismo-alm-ci -- bash -c 'echo "10.16.164.33 pragmatismo-system" >> /etc/hosts'
+```
 
 ### Deploy Step — CRITICAL
 The deploy step must **kill the running botserver process before `scp`**, otherwise `scp` fails with `dest open: Failure` (binary is locked by running process):
